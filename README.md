@@ -1,0 +1,153 @@
+# conduit
+
+`conduit` is a high-concurrency proxy service written in Go.
+
+It can accept inbound proxy traffic via:
+
+- HTTP proxy (including `CONNECT` for HTTPS tunneling)
+- SOCKS5 proxy (no-auth)
+- Linux transparent proxy listener (TPROXY-style; Linux-only)
+
+It can forward outbound connections:
+
+- Directly to the destination
+- Via an upstream HTTP proxy
+- Via an upstream SOCKS5 proxy
+
+## Build
+
+Requirements:
+
+- Go 1.22+ (the module targets Go 1.22)
+
+Build a local binary:
+
+```bash
+go build -o conduit .
+```
+
+Run tests:
+
+```bash
+go test ./...
+```
+
+## Run
+
+Run from the repo root:
+
+```bash
+conduit --http-listen 127.0.0.1:8080
+```
+
+### Common examples
+
+HTTP proxy (direct):
+
+```bash
+conduit \
+  --http-listen 127.0.0.1:8080 \
+  --upstream-mode direct
+```
+
+SOCKS5 proxy (direct):
+
+```bash
+conduit \
+  --socks5-listen 127.0.0.1:1080 \
+  --upstream-mode direct
+```
+
+HTTP proxy that forwards outbound connections via an upstream HTTP proxy:
+
+```bash
+conduit \
+  --http-listen 127.0.0.1:8080 \
+  --upstream-mode http \
+  --upstream-addr 10.0.0.2:3128
+```
+
+HTTP proxy that forwards outbound connections via an upstream SOCKS5 proxy:
+
+```bash
+conduit \
+  --http-listen 127.0.0.1:8080 \
+  --upstream-mode socks5 \
+  --upstream-addr 10.0.0.3:1080
+```
+
+## Flags
+
+Listener flags (any can be omitted to disable that listener):
+
+- `--http-listen=IP:port`
+- `--socks5-listen=IP:port`
+- `--tproxy-listen=IP:port` (Linux only)
+
+Forwarding flags:
+
+- `--upstream-mode=direct|http|socks5`
+- `--upstream-addr=IP:port` (required for `http` and `socks5` upstream modes)
+
+Performance/behavior flags:
+
+- `--buffer-size` (copy buffer size; backed by `sync.Pool`)
+- `--dial-timeout`
+- `--io-timeout`
+- `--http-header-timeout`
+- `--http-idle-timeout`
+
+TCP keepalive:
+
+- `--tcp-keepalive=on|off|keepidle:keepintvl:keepcnt`
+  - `on`: enable keepalive with kernel defaults
+  - `off`: disable keepalive
+  - `keepidle:keepintvl:keepcnt`: enable keepalive and (where supported) set:
+    - `keepidle` (seconds)
+    - `keepintvl` (seconds)
+    - `keepcnt` (count)
+
+## Current behavior / implementation notes
+
+- **HTTP (non-CONNECT)** uses `net/http/httputil.ReverseProxy`.
+  - A custom `RoundTripper` dials via the configured forwarding mode.
+- **HTTP CONNECT** uses HTTP hijacking and then bidirectional `io.Copy` piping.
+- **SOCKS5 server** supports:
+  - No-auth negotiation
+  - `CONNECT` command
+  - IPv4/IPv6/domain targets
+- **Upstream SOCKS5 forwarding** uses `golang.org/x/net/proxy.SOCKS5()`.
+  - `SOCKS5()` will use the provided forward dialer as a `proxy.ContextDialer` when available.
+  - This implementation provides a `ContextDialer`, so upstream SOCKS5 forwarding uses `DialContext` for improved cancellation.
+- **Keepalive** is applied to:
+  - All accepted TCP connections
+  - All outbound TCP dials
+
+## Linux transparent proxy (TPROXY)
+
+The Linux transparent proxy listener is intended for TPROXY-style deployments.
+
+Important notes:
+
+- You still need appropriate **routing and firewall rules** (iptables/nftables) to redirect traffic.
+- The implementation currently targets a common IPv4 `SO_ORIGINAL_DST` flow.
+- On non-Linux platforms, `--tproxy-listen` returns an error (build remains portable).
+
+## TODO / Caveats
+
+- **TPROXY robustness**:
+  - Support IPv6 original destination retrieval.
+  - Improve validation/diagnostics around kernel/sysctl prerequisites.
+- **HTTP proxy correctness/performance**:
+  - Consider connection reuse tuning and explicit transport settings (idle conns, max conns per host, etc.).
+  - Add explicit filtering/handling for hop-by-hop headers as needed for edge cases.
+- **Security/authentication**:
+  - Add optional auth for HTTP proxy and SOCKS5.
+  - Add allow/deny lists.
+- **Observability**:
+  - Structured logging.
+  - Prometheus metrics.
+- **Graceful shutdown**:
+  - Drain active tunnel connections more gracefully (currently relies on listener/server close).
+- **Context handling for upstream SOCKS5**:
+  - Verify cancellation behavior across all failure modes (DNS, connect, handshake) and add targeted tests.
