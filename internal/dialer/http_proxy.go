@@ -49,14 +49,9 @@ func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 		_ = c.SetDeadline(time.Now().Add(time.Duration(f.cfg.IOTimeout)))
 	}
 
-	bw := bufio.NewWriter(c)
-	if err := req.Write(bw); err != nil {
+	if err := req.Write(c); err != nil {
 		_ = c.Close()
 		return nil, fmt.Errorf("http proxy connect write: %w", err)
-	}
-	if err := bw.Flush(); err != nil {
-		_ = c.Close()
-		return nil, fmt.Errorf("http proxy connect flush: %w", err)
 	}
 
 	br := bufio.NewReader(c)
