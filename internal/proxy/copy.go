@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -17,33 +16,25 @@ func CopyBidirectional(ctx context.Context, left, right net.Conn, ioTimeout time
 		_ = right.SetDeadline(dl)
 	}
 
-	g, gctx := errgroup.WithContext(ctx)
-
-	var closeOnce sync.Once
-	closeBoth := func() {
-		closeOnce.Do(func() {
-			_ = left.Close()
-			_ = right.Close()
-		})
-	}
-	defer closeBoth()
+	cctx, cancel := context.WithCancel(ctx)
+	g, gctx := errgroup.WithContext(cctx)
 
 	g.Go(func() error {
 		_, err := io.Copy(left, right)
+		cancel()
 		return err
 	})
 
 	g.Go(func() error {
 		_, err := io.Copy(right, left)
+		cancel()
 		return err
 	})
 
-	// If the context is canceled, ensure we close both sides to unblock Copy.
-	g.Go(func() error {
-		<-gctx.Done()
-		closeBoth()
-		return nil
-	})
+	// When the context is canceled, ensure we close both sides to unblock Copy.
+	<-gctx.Done()
+	_ = left.Close()
+	_ = right.Close()
 
 	return g.Wait()
 }
