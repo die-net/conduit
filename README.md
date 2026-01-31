@@ -89,14 +89,14 @@ Forwarding flags:
 - `--upstream-mode=direct|http|socks5`
 - `--upstream-addr=IP:port` (required for `http` and `socks5` upstream modes)
 
-Performance/behavior flags:
+Timeout behavior:
 
-- `--dial-timeout`
-- `--io-timeout`
-- `--http-header-timeout`
-- `--http-idle-timeout`
+- `--dial-timeout` bounds DNS lookups and TCP connect.
+- `--negotiation-timeout` bounds protocol handshakes (HTTP CONNECT and SOCKS5 negotiation/CONNECT).
+- `--http-idle-timeout` limits how long HTTP connections remain idle before being closed.
+- After negotiation completes, there's no explicit timeout on connections.  It is assumed that either the client or server will close as needed, or that TCP keepalive will detect and remove stale connections.
 
-TCP keepalive:
+TCP keepalive is optionally applied to all accepted TCP connections and all outbound TCP dials, so the kernel will detect when connections are stale:
 
 - `--tcp-keepalive=on|off|keepidle:keepintvl:keepcnt`
   - `on`: enable keepalive with kernel defaults
@@ -115,12 +115,10 @@ TCP keepalive:
   - No-auth negotiation
   - `CONNECT` command
   - IPv4/IPv6/domain targets
-- **Upstream SOCKS5 forwarding** uses `golang.org/x/net/proxy.SOCKS5()`.
-  - `SOCKS5()` will use the provided forward dialer as a `proxy.ContextDialer` when available.
-  - This implementation provides a `ContextDialer`, so upstream SOCKS5 forwarding uses `DialContext` for improved cancellation.
-- **Keepalive** is applied to:
-  - All accepted TCP connections
-  - All outbound TCP dials
+- **Upstream SOCKS5 forwarding** uses `github.com/txthinking/socks5`.
+  - Outbound proxy connections are dialed with the internal dialer interface (`DialContext`).
+  - SOCKS5 negotiation and CONNECT are performed using the library's low-level protocol API.
+- After connections are negotiated, we try to preserve the Linux zero-copy fast path.
 
 ## Linux transparent proxy (TPROXY)
 
