@@ -29,8 +29,7 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	}()
 
 	cfg := Config{
-		DialTimeout: 2 * time.Second,
-		Forward: dialer.NewDirectDialer(dialer.Config{
+		Dialer: dialer.NewDirectDialer(dialer.Config{
 			DialTimeout: 2 * time.Second,
 		}),
 	}

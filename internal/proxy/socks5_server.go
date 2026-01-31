@@ -62,7 +62,7 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) {
 	dst := req.Address()
 
 	ctx := context.Background()
-	up, err := s.cfg.Forward.Dial(ctx, "tcp", dst)
+	up, err := s.cfg.Dialer.DialContext(ctx, "tcp", dst)
 	if err != nil {
 		var rep *socks5.Reply
 		if req.Atyp == socks5.ATYPIPv6 {

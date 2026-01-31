@@ -32,8 +32,8 @@ func (f *HTTPProxyDialer) Direct() Dialer {
 	return f.direct
 }
 
-func (f *HTTPProxyDialer) Dial(ctx context.Context, network, address string) (net.Conn, error) {
-	c, err := f.direct.Dial(ctx, network, f.proxyAddr)
+func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	c, err := f.direct.DialContext(ctx, network, f.proxyAddr)
 	if err != nil {
 		return nil, err
 	}

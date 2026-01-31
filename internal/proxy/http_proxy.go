@@ -65,7 +65,7 @@ func (s *HTTPProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ctx := r.Context()
-	serverConn, err := s.cfg.Forward.Dial(ctx, "tcp", target)
+	serverConn, err := s.cfg.Dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
 		_, _ = io.WriteString(brw, "HTTP/1.1 502 Bad Gateway\r\n\r\n")
 		_ = brw.Flush()
@@ -121,14 +121,14 @@ func newForwardingTransport(cfg Config) http.RoundTripper {
 	ft := &forwardingTransport{}
 
 	proxyFunc := func(*http.Request) (*url.URL, error) { return nil, nil }
-	dial := cfg.Forward.Dial
+	dial := cfg.Dialer.DialContext
 
 	// For non-CONNECT HTTP proxying, prefer the standard library proxy support when the
 	// configured dialer is an HTTP proxy.
-	if up, ok := cfg.Forward.(*dialer.HTTPProxyDialer); ok {
+	if up, ok := cfg.Dialer.(*dialer.HTTPProxyDialer); ok {
 		proxyFunc = http.ProxyURL(&url.URL{Scheme: "http", Host: up.ProxyAddr()})
 		// When using Transport.Proxy, DialContext is used to connect to the proxy itself.
-		dial = up.Direct().Dial
+		dial = up.Direct().DialContext
 	}
 
 	ft.base = http.Transport{

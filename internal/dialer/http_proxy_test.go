@@ -81,7 +81,7 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := f.Dial(ctx, "tcp", echoLn.Addr().String())
+	conn, err := f.DialContext(ctx, "tcp", echoLn.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestHTTPProxyDialerDialNon2xx(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err = f.Dial(ctx, "tcp", "127.0.0.1:1")
+	_, err = f.DialContext(ctx, "tcp", "127.0.0.1:1")
 	if err == nil {
 		t.Fatalf("expected error")
 	}

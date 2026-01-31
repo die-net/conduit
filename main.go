@@ -74,11 +74,11 @@ func main() {
 
 	switch mode {
 	case "direct":
-		cfg.Forward = dialer.NewDirectDialer(dialCfg)
+		cfg.Dialer = dialer.NewDirectDialer(dialCfg)
 	case "http":
-		cfg.Forward = dialer.NewHTTPProxyDialer(dialCfg, *upstreamAddr)
+		cfg.Dialer = dialer.NewHTTPProxyDialer(dialCfg, *upstreamAddr)
 	case "socks5":
-		cfg.Forward = dialer.NewSOCKS5ProxyDialer(dialCfg, *upstreamAddr)
+		cfg.Dialer = dialer.NewSOCKS5ProxyDialer(dialCfg, *upstreamAddr)
 	default:
 		log.Fatalf("unreachable upstream mode")
 	}

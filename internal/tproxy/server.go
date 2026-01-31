@@ -12,11 +12,11 @@ import (
 type Server struct {
 	KeepAlive net.KeepAliveConfig
 	IOTimeout time.Duration
-	Forward   dialer.Dialer
+	Dialer    dialer.Dialer
 }
 
 func NewServer(cfg proxy.Config) *Server {
-	return &Server{KeepAlive: cfg.KeepAlive, IOTimeout: cfg.IOTimeout, Forward: cfg.Forward}
+	return &Server{KeepAlive: cfg.KeepAlive, IOTimeout: cfg.IOTimeout, Dialer: cfg.Dialer}
 }
 
 func (s *Server) Serve(ln net.Listener) error {
@@ -42,7 +42,7 @@ func (s *Server) handle(conn net.Conn) {
 		return
 	}
 
-	up, err := s.Forward.Dial(context.Background(), "tcp", dst.String())
+	up, err := s.Dialer.DialContext(context.Background(), "tcp", dst.String())
 	if err != nil {
 		return
 	}

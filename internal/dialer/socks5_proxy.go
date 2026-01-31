@@ -18,7 +18,7 @@ func NewSOCKS5ProxyDialer(cfg Config, proxyAddr string) Dialer {
 	return &SOCKS5ProxyDialer{cfg: cfg, proxyAddr: proxyAddr}
 }
 
-func (f *SOCKS5ProxyDialer) Dial(ctx context.Context, network, address string) (net.Conn, error) {
+func (f *SOCKS5ProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	_ = ctx
 	if network != "tcp" {
 		return nil, fmt.Errorf("socks5 proxy dial %s %s: unsupported network", network, address)

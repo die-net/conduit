@@ -33,9 +33,8 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 	}()
 
 	cfg := Config{
-		DialTimeout:       2 * time.Second,
 		HTTPHeaderTimeout: 2 * time.Second,
-		Forward: dialer.NewDirectDialer(dialer.Config{
+		Dialer: dialer.NewDirectDialer(dialer.Config{
 			DialTimeout: 2 * time.Second,
 		}),
 	}
@@ -113,9 +112,8 @@ func BenchmarkHTTPProxyDirect(b *testing.B) {
 	}
 
 	cfg := Config{
-		DialTimeout:       2 * time.Second,
 		HTTPHeaderTimeout: 2 * time.Second,
-		Forward: dialer.NewDirectDialer(dialer.Config{
+		Dialer: dialer.NewDirectDialer(dialer.Config{
 			DialTimeout: 2 * time.Second,
 		}),
 	}

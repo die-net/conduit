@@ -14,7 +14,7 @@ func NewDirectDialer(cfg Config) Dialer {
 	return &directDialer{cfg: cfg}
 }
 
-func (f *directDialer) Dial(ctx context.Context, network, address string) (net.Conn, error) {
+func (f *directDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	dd := net.Dialer{Timeout: f.cfg.DialTimeout}
 
 	conn, err := dd.DialContext(ctx, network, address)
