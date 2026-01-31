@@ -4,18 +4,11 @@ import (
 	"context"
 	"io"
 	"net"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 )
 
-func CopyBidirectional(ctx context.Context, left, right net.Conn, ioTimeout time.Duration) error {
-	if ioTimeout > 0 {
-		dl := time.Now().Add(time.Duration(ioTimeout))
-		_ = left.SetDeadline(dl)
-		_ = right.SetDeadline(dl)
-	}
-
+func CopyBidirectional(ctx context.Context, left, right net.Conn) error {
 	cctx, cancel := context.WithCancel(ctx)
 	g, gctx := errgroup.WithContext(cctx)
 

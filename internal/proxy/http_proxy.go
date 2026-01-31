@@ -24,7 +24,7 @@ func NewHTTPProxyServer(cfg Config, idleTimeout time.Duration) *HTTPProxyServer 
 	h.rp = h.newReverseProxy()
 	h.srv = &http.Server{
 		Handler:           http.HandlerFunc(h.handle),
-		ReadHeaderTimeout: cfg.HTTPHeaderTimeout,
+		ReadHeaderTimeout: cfg.NegotiationTimeout,
 		IdleTimeout:       idleTimeout,
 	}
 	return h
@@ -76,7 +76,7 @@ func (s *HTTPProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) 
 	_, _ = io.WriteString(brw, "HTTP/1.1 200 Connection Established\r\n\r\n")
 	_ = brw.Flush()
 
-	_ = CopyBidirectional(ctx, clientConn, serverConn, s.cfg.IOTimeout)
+	_ = CopyBidirectional(ctx, clientConn, serverConn)
 }
 
 func (s *HTTPProxyServer) newReverseProxy() *httputil.ReverseProxy {

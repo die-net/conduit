@@ -8,8 +8,7 @@ import (
 )
 
 type Config struct {
-	IOTimeout         time.Duration
-	HTTPHeaderTimeout time.Duration
+	NegotiationTimeout time.Duration
 
 	KeepAlive net.KeepAliveConfig
 

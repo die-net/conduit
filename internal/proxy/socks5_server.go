@@ -33,6 +33,10 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) {
 		tc.SetKeepAliveConfig(s.cfg.KeepAlive)
 	}
 
+	if s.cfg.NegotiationTimeout > 0 {
+		_ = conn.SetDeadline(time.Now().Add(time.Duration(s.cfg.NegotiationTimeout)))
+	}
+
 	// negotiation (no-auth only)
 	neg, err := socks5.NewNegotiationRequestFrom(conn)
 	if err != nil {
@@ -86,10 +90,10 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) {
 		return
 	}
 
-	// Once we've finished the SOCKS5 handshake, switch to bidirectional proxying.
-	if s.cfg.IOTimeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(time.Duration(s.cfg.IOTimeout)))
-		_ = up.SetDeadline(time.Now().Add(time.Duration(s.cfg.IOTimeout)))
+	if s.cfg.NegotiationTimeout > 0 {
+		_ = conn.SetDeadline(time.Time{})
 	}
-	_ = CopyBidirectional(ctx, conn, up, s.cfg.IOTimeout)
+
+	// Once we've finished the SOCKS5 handshake, switch to bidirectional proxying.
+	_ = CopyBidirectional(ctx, conn, up)
 }

@@ -45,8 +45,8 @@ func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 		Header: make(http.Header),
 	}
 
-	if f.cfg.IOTimeout > 0 {
-		_ = c.SetDeadline(time.Now().Add(time.Duration(f.cfg.IOTimeout)))
+	if f.cfg.NegotiationTimeout > 0 {
+		_ = c.SetDeadline(time.Now().Add(time.Duration(f.cfg.NegotiationTimeout)))
 	}
 
 	if err := req.Write(c); err != nil {
@@ -66,7 +66,7 @@ func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 		return nil, fmt.Errorf("http proxy connect failed: %s", resp.Status)
 	}
 
-	if f.cfg.IOTimeout > 0 {
+	if f.cfg.NegotiationTimeout > 0 {
 		_ = c.SetDeadline(time.Time{})
 	}
 	return c, nil

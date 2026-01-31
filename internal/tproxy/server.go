@@ -3,7 +3,6 @@ package tproxy
 import (
 	"context"
 	"net"
-	"time"
 
 	"github.com/die-net/conduit/internal/dialer"
 	"github.com/die-net/conduit/internal/proxy"
@@ -11,12 +10,11 @@ import (
 
 type Server struct {
 	KeepAlive net.KeepAliveConfig
-	IOTimeout time.Duration
 	Dialer    dialer.Dialer
 }
 
 func NewServer(cfg proxy.Config) *Server {
-	return &Server{KeepAlive: cfg.KeepAlive, IOTimeout: cfg.IOTimeout, Dialer: cfg.Dialer}
+	return &Server{KeepAlive: cfg.KeepAlive, Dialer: cfg.Dialer}
 }
 
 func (s *Server) Serve(ln net.Listener) error {
@@ -48,5 +46,5 @@ func (s *Server) handle(conn net.Conn) {
 	}
 	defer up.Close()
 
-	_ = proxy.CopyBidirectional(context.Background(), conn, up, s.IOTimeout)
+	_ = proxy.CopyBidirectional(context.Background(), conn, up)
 }

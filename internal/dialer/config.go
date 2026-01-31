@@ -6,7 +6,7 @@ import (
 )
 
 type Config struct {
-	DialTimeout time.Duration
-	IOTimeout   time.Duration
-	KeepAlive   net.KeepAliveConfig
+	DialTimeout        time.Duration
+	NegotiationTimeout time.Duration
+	KeepAlive          net.KeepAliveConfig
 }

@@ -114,6 +114,39 @@ func TestSOCKS5ProxyDialerDialSuccess(t *testing.T) {
 	wg.Wait()
 }
 
+func TestSOCKS5ProxyDialerDialContextCancel(t *testing.T) {
+	upLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer upLn.Close()
+
+	acceptDone := make(chan struct{})
+	go func() {
+		defer close(acceptDone)
+		c, err := upLn.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+
+		select {}
+	}()
+
+	f := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err = f.DialContext(ctx, "tcp", "127.0.0.1:1")
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+
+	_ = upLn.Close()
+	<-acceptDone
+}
+
 func TestSOCKS5ProxyDialerDialFail(t *testing.T) {
 	upLn, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

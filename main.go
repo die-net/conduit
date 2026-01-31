@@ -32,10 +32,9 @@ func main() {
 		upstreamMode = pflag.String("upstream-mode", "direct", "Forwarding mode: direct|http|socks5")
 		upstreamAddr = pflag.String("upstream-addr", "", "Upstream proxy address (IP:port) for upstream-mode http or socks5")
 
-		dialTimeout       = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound TCP dials")
-		ioTimeout         = pflag.Duration("io-timeout", 4*time.Minute, "If non-zero, set per-connection read/write deadlines to now+io-timeout")
-		httpHeaderTimeout = pflag.Duration("http-header-timeout", 20*time.Second, "Timeout for reading HTTP request headers")
-		httpIdleTimeout   = pflag.Duration("http-idle-timeout", 4*time.Minute, "Idle timeout for HTTP proxy server")
+		dialTimeout        = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound TCP dials")
+		negotiationTimeout = pflag.Duration("negotiation-timeout", 10*time.Second, "Timeout for protocol negotiation to set up connection")
+		httpIdleTimeout    = pflag.Duration("http-idle-timeout", 4*time.Minute, "Idle timeout for HTTP proxy server")
 
 		tcpKeepAlive = pflag.String("tcp-keepalive", "45:45:3", "TCP keepalive: on|off|keepidle:keepintvl:keepcnt")
 	)
@@ -60,16 +59,14 @@ func main() {
 	}
 
 	cfg := proxy.Config{
-		DialTimeout:       *dialTimeout,
-		IOTimeout:         *ioTimeout,
-		HTTPHeaderTimeout: *httpHeaderTimeout,
-		KeepAlive:         ka,
+		NegotiationTimeout: *negotiationTimeout,
+		KeepAlive:          ka,
 	}
 
 	dialCfg := dialer.Config{
-		DialTimeout: cfg.DialTimeout,
-		IOTimeout:   cfg.IOTimeout,
-		KeepAlive:   cfg.KeepAlive,
+		DialTimeout:        *dialTimeout,
+		NegotiationTimeout: cfg.NegotiationTimeout,
+		KeepAlive:          cfg.KeepAlive,
 	}
 
 	switch mode {
