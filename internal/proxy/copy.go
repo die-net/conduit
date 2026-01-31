@@ -9,6 +9,9 @@ import (
 )
 
 func CopyBidirectional(ctx context.Context, left, right net.Conn) error {
+	// There can't be deadlines set on arguments to io.Copy to be able
+	// to use Go's zero-copy hot path that uses splice.  Instead,
+	// we Close() both sockets if the context is cancelled.
 	cctx, cancel := context.WithCancel(ctx)
 	g, gctx := errgroup.WithContext(cctx)
 
