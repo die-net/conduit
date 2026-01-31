@@ -3,6 +3,8 @@ package proxy
 import (
 	"net"
 	"time"
+
+	"github.com/die-net/conduit/internal/dialer"
 )
 
 type Config struct {
@@ -12,5 +14,5 @@ type Config struct {
 
 	KeepAlive net.KeepAliveConfig
 
-	Forward Forwarder
+	Forward dialer.Forwarder
 }

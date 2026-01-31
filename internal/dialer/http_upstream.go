@@ -1,4 +1,4 @@
-package proxy
+package dialer
 
 import (
 	"bufio"
@@ -10,28 +10,34 @@ import (
 	"time"
 )
 
-type httpUpstreamForwarder struct {
-	cfg      Config
-	upAddr   string
-	direct   Forwarder
-	deadline time.Duration
+type HTTPUpstreamForwarder struct {
+	cfg    Config
+	upAddr string
+	direct Forwarder
 }
 
 func NewHTTPUpstreamForwarder(cfg Config, upstreamAddr string) Forwarder {
-	return &httpUpstreamForwarder{
+	return &HTTPUpstreamForwarder{
 		cfg:    cfg,
 		upAddr: upstreamAddr,
 		direct: NewDirectForwarder(cfg),
 	}
 }
 
-func (f *httpUpstreamForwarder) Dial(ctx context.Context, network, address string) (net.Conn, error) {
+func (f *HTTPUpstreamForwarder) UpstreamAddr() string {
+	return f.upAddr
+}
+
+func (f *HTTPUpstreamForwarder) Direct() Forwarder {
+	return f.direct
+}
+
+func (f *HTTPUpstreamForwarder) Dial(ctx context.Context, network, address string) (net.Conn, error) {
 	c, err := f.direct.Dial(ctx, network, f.upAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	// CONNECT target via HTTP proxy
 	req := &http.Request{
 		Method: http.MethodConnect,
 		URL:    &url.URL{Opaque: address},
@@ -65,7 +71,6 @@ func (f *httpUpstreamForwarder) Dial(ctx context.Context, network, address strin
 		return nil, fmt.Errorf("http upstream connect failed: %s", resp.Status)
 	}
 
-	// Clear deadline after handshake
 	if f.cfg.IOTimeout > 0 {
 		_ = c.SetDeadline(time.Time{})
 	}

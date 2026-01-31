@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/die-net/conduit/internal/dialer"
 )
 
 type HTTPProxyServer struct {
@@ -123,10 +125,10 @@ func newForwardingTransport(cfg Config) http.RoundTripper {
 
 	// For non-CONNECT HTTP proxying, prefer the standard library proxy support when the
 	// configured forwarder is an HTTP upstream.
-	if up, ok := cfg.Forward.(*httpUpstreamForwarder); ok {
-		proxyFunc = http.ProxyURL(&url.URL{Scheme: "http", Host: up.upAddr})
+	if up, ok := cfg.Forward.(*dialer.HTTPUpstreamForwarder); ok {
+		proxyFunc = http.ProxyURL(&url.URL{Scheme: "http", Host: up.UpstreamAddr()})
 		// When using Transport.Proxy, DialContext is used to connect to the proxy itself.
-		dial = up.direct.Dial
+		dial = up.Direct().Dial
 	}
 
 	ft.base = http.Transport{

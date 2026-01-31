@@ -1,4 +1,4 @@
-package proxy
+package dialer
 
 import (
 	"bufio"
@@ -76,8 +76,7 @@ func TestHTTPUpstreamForwarderDialSuccess(t *testing.T) {
 		_, _ = io.Copy(c, dst)
 	}()
 
-	cfg := Config{DialTimeout: 2 * time.Second}
-	f := NewHTTPUpstreamForwarder(cfg, upLn.Addr().String())
+	f := NewHTTPUpstreamForwarder(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -131,8 +130,7 @@ func TestHTTPUpstreamForwarderDialNon2xx(t *testing.T) {
 		_, _ = io.WriteString(c, "HTTP/1.1 403 Forbidden\r\n\r\n")
 	}()
 
-	cfg := Config{DialTimeout: 2 * time.Second}
-	f := NewHTTPUpstreamForwarder(cfg, upLn.Addr().String())
+	f := NewHTTPUpstreamForwarder(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

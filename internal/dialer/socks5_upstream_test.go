@@ -1,4 +1,4 @@
-package proxy
+package dialer
 
 import (
 	"context"
@@ -87,8 +87,7 @@ func TestSOCKS5UpstreamForwarderDialSuccess(t *testing.T) {
 		_, _ = io.Copy(c, dst)
 	}()
 
-	cfg := Config{DialTimeout: 2 * time.Second}
-	f := NewSOCKS5UpstreamForwarder(cfg, upLn.Addr().String())
+	f := NewSOCKS5UpstreamForwarder(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -148,8 +147,7 @@ func TestSOCKS5UpstreamForwarderDialFail(t *testing.T) {
 		_, _ = socks5.NewReply(socks5.RepConnectionRefused, socks5.ATYPIPv4, []byte{0x00, 0x00, 0x00, 0x00}, []byte{0x00, 0x00}).WriteTo(c)
 	}()
 
-	cfg := Config{DialTimeout: 2 * time.Second}
-	f := NewSOCKS5UpstreamForwarder(cfg, upLn.Addr().String())
+	f := NewSOCKS5UpstreamForwarder(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

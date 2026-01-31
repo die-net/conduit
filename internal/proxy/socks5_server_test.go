@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/die-net/conduit/internal/dialer"
 	"github.com/txthinking/socks5"
 )
 
@@ -27,7 +28,12 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 		_, _ = c.Write(buf[:n])
 	}()
 
-	cfg := Config{DialTimeout: 2 * time.Second, Forward: NewDirectForwarder(Config{DialTimeout: 2 * time.Second})}
+	cfg := Config{
+		DialTimeout: 2 * time.Second,
+		Forward: dialer.NewDirectForwarder(dialer.Config{
+			DialTimeout: 2 * time.Second,
+		}),
+	}
 
 	ln, err := ListenTCP("tcp", "127.0.0.1:0", net.KeepAliveConfig{Enable: false})
 	if err != nil {

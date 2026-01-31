@@ -17,6 +17,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/die-net/conduit/internal/dialer"
 	"github.com/die-net/conduit/internal/proxy"
 	"github.com/die-net/conduit/internal/tproxy"
 )
@@ -65,13 +66,19 @@ func main() {
 		KeepAlive:         ka,
 	}
 
+	dialCfg := dialer.Config{
+		DialTimeout: cfg.DialTimeout,
+		IOTimeout:   cfg.IOTimeout,
+		KeepAlive:   cfg.KeepAlive,
+	}
+
 	switch mode {
 	case "direct":
-		cfg.Forward = proxy.NewDirectForwarder(cfg)
+		cfg.Forward = dialer.NewDirectForwarder(dialCfg)
 	case "http":
-		cfg.Forward = proxy.NewHTTPUpstreamForwarder(cfg, *upstreamAddr)
+		cfg.Forward = dialer.NewHTTPUpstreamForwarder(dialCfg, *upstreamAddr)
 	case "socks5":
-		cfg.Forward = proxy.NewSOCKS5UpstreamForwarder(cfg, *upstreamAddr)
+		cfg.Forward = dialer.NewSOCKS5UpstreamForwarder(dialCfg, *upstreamAddr)
 	default:
 		log.Fatalf("unreachable upstream mode")
 	}

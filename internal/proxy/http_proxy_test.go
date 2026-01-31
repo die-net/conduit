@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/die-net/conduit/internal/dialer"
 )
 
 func TestHTTPProxyConnectDirect(t *testing.T) {
@@ -33,7 +35,9 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 	cfg := Config{
 		DialTimeout:       2 * time.Second,
 		HTTPHeaderTimeout: 2 * time.Second,
-		Forward:           NewDirectForwarder(Config{DialTimeout: 2 * time.Second}),
+		Forward: dialer.NewDirectForwarder(dialer.Config{
+			DialTimeout: 2 * time.Second,
+		}),
 	}
 
 	ln, err := ListenTCP("tcp", "127.0.0.1:0", net.KeepAliveConfig{Enable: false})
@@ -111,7 +115,9 @@ func BenchmarkHTTPProxyDirect(b *testing.B) {
 	cfg := Config{
 		DialTimeout:       2 * time.Second,
 		HTTPHeaderTimeout: 2 * time.Second,
-		Forward:           NewDirectForwarder(Config{DialTimeout: 2 * time.Second}),
+		Forward: dialer.NewDirectForwarder(dialer.Config{
+			DialTimeout: 2 * time.Second,
+		}),
 	}
 
 	ln, err := ListenTCP("tcp", "127.0.0.1:0", net.KeepAliveConfig{Enable: false})
