@@ -106,6 +106,7 @@ func (s *HTTPProxyServer) newReverseProxy() *httputil.ReverseProxy {
 		Transport:     newForwardingTransport(s.cfg),
 		FlushInterval: 10 * time.Millisecond, // Only buffer incomplete responses briefly
 		ErrorHandler:  errHandler,
+		BufferPool:    NewBufferPool(32768),
 	}
 }
 
