@@ -22,7 +22,7 @@ func NewHTTPProxyServer(cfg Config, idleTimeout time.Duration) *HTTPProxyServer 
 	h.rp = h.newReverseProxy()
 	h.srv = &http.Server{
 		Handler:           http.HandlerFunc(h.handle),
-		ReadHeaderTimeout: time.Duration(cfg.HTTPHeaderTimeout),
+		ReadHeaderTimeout: cfg.HTTPHeaderTimeout,
 		IdleTimeout:       idleTimeout,
 	}
 	return h
@@ -97,7 +97,6 @@ func (s *HTTPProxyServer) newReverseProxy() *httputil.ReverseProxy {
 	}
 
 	errHandler := func(w http.ResponseWriter, r *http.Request, _ error) {
-		// Keep behavior simple/consistent with previous code.
 		w.WriteHeader(http.StatusBadGateway)
 	}
 

@@ -1,12 +1,13 @@
 package proxy
 
 import (
-	"bufio"
 	"context"
-	"encoding/binary"
+	"io"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/txthinking/socks5"
 )
 
 func TestSOCKS5ConnectDirect(t *testing.T) {
@@ -37,60 +38,26 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	srv := NewSOCKS5Server(cfg)
 	go func() { _ = srv.Serve(ln) }()
 
-	c, err := net.Dial("tcp", ln.Addr().String())
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	client, err := socks5.NewClient(ln.Addr().String(), "", "", 2, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := client.Dial("tcp", echoLn.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.Close()
-
-	br := bufio.NewReader(c)
-	bw := bufio.NewWriter(c)
-
-	// greeting
-	_, _ = bw.Write([]byte{0x05, 0x01, 0x00})
-	_ = bw.Flush()
-	resp := make([]byte, 2)
-	if _, err := br.Read(resp); err != nil {
-		t.Fatal(err)
-	}
-	if resp[1] != 0x00 {
-		t.Fatalf("expected noauth")
-	}
-
-	host, portStr, _ := net.SplitHostPort(echoLn.Addr().String())
-	port, _ := net.LookupPort("tcp", portStr)
-
-	// request
-	_ = bw.WriteByte(0x05)
-	_ = bw.WriteByte(0x01)
-	_ = bw.WriteByte(0x00)
-	_ = bw.WriteByte(0x01)
-	_, _ = bw.Write(net.ParseIP(host).To4())
-	pb := make([]byte, 2)
-	binary.BigEndian.PutUint16(pb, uint16(port))
-	_, _ = bw.Write(pb)
-	_ = bw.Flush()
-
-	rep := make([]byte, 4)
-	if _, err := br.Read(rep); err != nil {
-		t.Fatal(err)
-	}
-	if rep[1] != 0x00 {
-		t.Fatalf("expected success rep got %d", rep[1])
-	}
-
-	// consume bind addr+port (ipv4)
-	_, _ = br.Discard(4 + 2)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
 
 	msg := []byte("hello")
 	if _, err := c.Write(msg); err != nil {
 		t.Fatal(err)
 	}
 	buf := make([]byte, len(msg))
-	if _, err := br.Read(buf); err != nil {
+	if _, err := io.ReadFull(c, buf); err != nil {
 		t.Fatal(err)
 	}
 	if string(buf) != string(msg) {
