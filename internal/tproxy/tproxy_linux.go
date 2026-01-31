@@ -10,11 +10,12 @@ import (
 	"unsafe"
 
 	"github.com/die-net/conduit/internal/proxy"
+	"golang.org/x/sys/unix"
 )
 
 // ListenTransparentTCP listens on addr and enables IP_TRANSPARENT so the socket can accept redirected
 // connections (typical TPROXY setup). Note: you still need appropriate iptables/nft rules.
-func ListenTransparentTCP(addr string, ka net.KeepAliveConfig) (net.Listener, error) {
+func ListenTransparentTCP(addr string, keepAliveConfig net.KeepAliveConfig) (net.Listener, error) {
 	lc := net.ListenConfig{Control: func(network, address string, c syscall.RawConn) error {
 		var ctrlErr error
 		err := c.Control(func(fd uintptr) {
@@ -29,21 +30,19 @@ func ListenTransparentTCP(addr string, ka net.KeepAliveConfig) (net.Listener, er
 	if err != nil {
 		return nil, fmt.Errorf("listen tproxy %s: %w", addr, err)
 	}
-	return &keepAliveListener{Listener: ln, ka: ka}, nil
+	return &proxy.KeepAliveListener{Listener: ln, KeepAliveConfig: keepAliveConfig}, nil
 }
 
-type keepAliveListener struct {
-	net.Listener
-	ka net.KeepAliveConfig
-}
-
-func (l *keepAliveListener) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
+// isV6 looks up the connection's local address and returns whether it is
+// IPv6-capable or not.
+func isV6(tc *net.TCPConn) bool {
+	if la, ok := tc.LocalAddr().(*net.TCPAddr); ok {
+		if la.IP != nil && la.IP.To4() == nil {
+			return true
+		}
 	}
-	proxy.ApplyKeepAlive(c, l.ka)
-	return c, nil
+
+	return false
 }
 
 // OriginalDst returns the original destination for a TCP connection redirected to this listener.
@@ -52,46 +51,98 @@ func OriginalDst(c net.Conn) (*net.TCPAddr, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	rc, err := tc.SyscallConn()
 	if err != nil {
 		return nil, false
 	}
 
-	var (
-		addr  *net.TCPAddr
-		okRet bool
-	)
+	if isV6(tc) {
+		return originalDstV6(rc, tc)
+	}
+
+	return originalDstV4(rc, tc)
+}
+
+func originalDstV4(rc syscall.RawConn, tc *net.TCPConn) (*net.TCPAddr, bool) {
+	success := false
+	var addr *net.TCPAddr
 
 	_ = rc.Control(func(fd uintptr) {
-		// SO_ORIGINAL_DST is 80 for IPv4 in Linux.
 		// We retrieve a raw sockaddr from getsockopt.
-		const soOriginalDst = 80
 		var raw [128]byte
+
 		sz := uint32(len(raw))
-		_, _, e := syscall.Syscall6(
-			syscall.SYS_GETSOCKOPT,
+		_, _, e := unix.Syscall6(
+			unix.SYS_GETSOCKOPT,
 			uintptr(fd),
-			uintptr(syscall.IPPROTO_IP),
-			uintptr(soOriginalDst),
+			uintptr(unix.IPPROTO_IP),
+			uintptr(unix.SO_ORIGINAL_DST),
 			uintptr(unsafe.Pointer(&raw[0])),
 			uintptr(unsafe.Pointer(&sz)),
 			0,
 		)
-		if e != 0 {
+		if e != 0 || sz < uint32(unsafe.Sizeof(unix.RawSockaddrInet4{})) {
 			return
 		}
-		if sz < uint32(unsafe.Sizeof(syscall.RawSockaddrInet4{})) {
+		sa := (*unix.RawSockaddrInet4)(unsafe.Pointer(&raw[0]))
+		if sa.Family != unix.AF_INET {
 			return
 		}
-		sa := (*syscall.RawSockaddrInet4)(unsafe.Pointer(&raw[0]))
-		if sa.Family != syscall.AF_INET {
-			return
-		}
-		port := int(sa.Port>>8)&0xff | (int(sa.Port&0xff) << 8)
+
+		port := ntohs(sa.Port)
 		ip := net.IPv4(sa.Addr[0], sa.Addr[1], sa.Addr[2], sa.Addr[3])
 		addr = &net.TCPAddr{IP: ip, Port: port}
-		okRet = true
+		success = true
+		return
 	})
 
-	return addr, okRet
+	return addr, success
+}
+
+func originalDstV6(rc syscall.RawConn, tc *net.TCPConn) (*net.TCPAddr, bool) {
+	success := false
+	var addr *net.TCPAddr
+
+	_ = rc.Control(func(fd uintptr) {
+		// We retrieve a raw sockaddr from getsockopt.
+		var raw [128]byte
+
+		sz := uint32(len(raw))
+		_, _, e := unix.Syscall6(
+			unix.SYS_GETSOCKOPT,
+			uintptr(fd),
+			uintptr(unix.IPPROTO_IPV6),
+			uintptr(unix.SO_ORIGINAL_DST),
+			uintptr(unsafe.Pointer(&raw[0])),
+			uintptr(unsafe.Pointer(&sz)),
+			0,
+		)
+		if e != 0 || sz < uint32(unsafe.Sizeof(unix.RawSockaddrInet6{})) {
+			return
+		}
+		sa := (*unix.RawSockaddrInet6)(unsafe.Pointer(&raw[0]))
+		if sa.Family != unix.AF_INET6 {
+			return
+		}
+		port := ntohs(sa.Port)
+		ip := make(net.IP, net.IPv6len)
+		copy(ip, sa.Addr[:])
+
+		zone := ""
+		if sa.Scope_id != 0 {
+			if ifi, err := net.InterfaceByIndex(int(sa.Scope_id)); err == nil {
+				zone = ifi.Name
+			}
+		}
+
+		addr = &net.TCPAddr{IP: ip, Port: port, Zone: zone}
+		success = true
+	})
+
+	return addr, success
+}
+
+func ntohs(p uint16) int {
+	return int(p>>8)&0xff | (int(p&0xff) << 8)
 }

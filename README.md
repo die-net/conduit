@@ -91,7 +91,6 @@ Forwarding flags:
 
 Performance/behavior flags:
 
-- `--buffer-size` (copy buffer size; backed by `sync.Pool`)
 - `--dial-timeout`
 - `--io-timeout`
 - `--http-header-timeout`
@@ -130,13 +129,12 @@ The Linux transparent proxy listener is intended for TPROXY-style deployments.
 Important notes:
 
 - You still need appropriate **routing and firewall rules** (iptables/nftables) to redirect traffic.
-- The implementation currently targets a common IPv4 `SO_ORIGINAL_DST` flow.
+- The implementation uses `golang.org/x/sys/unix` and `unix.SO_ORIGINAL_DST` to retrieve the original destination via `getsockopt` for both IPv4 and IPv6.
 - On non-Linux platforms, `--tproxy-listen` returns an error (build remains portable).
 
 ## TODO / Caveats
 
 - **TPROXY robustness**:
-  - Support IPv6 original destination retrieval.
   - Improve validation/diagnostics around kernel/sysctl prerequisites.
 - **HTTP proxy correctness/performance**:
   - Consider connection reuse tuning and explicit transport settings (idle conns, max conns per host, etc.).

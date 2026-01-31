@@ -14,15 +14,15 @@ func ListenTCP(network, addr string, keepAliveConfig net.KeepAliveConfig) (net.L
 		return nil, fmt.Errorf("listen %s %s: %w", network, addr, err)
 	}
 
-	return &keepAliveListener{Listener: ln, KeepAliveConfig: keepAliveConfig}, nil
+	return &KeepAliveListener{Listener: ln, KeepAliveConfig: keepAliveConfig}, nil
 }
 
-type keepAliveListener struct {
+type KeepAliveListener struct {
 	net.Listener
 	net.KeepAliveConfig
 }
 
-func (l *keepAliveListener) Accept() (net.Conn, error) {
+func (l *KeepAliveListener) Accept() (net.Conn, error) {
 	conn, err := l.Listener.Accept()
 	if err != nil {
 		return nil, err
