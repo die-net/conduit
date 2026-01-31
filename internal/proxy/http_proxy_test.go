@@ -3,8 +3,10 @@ package proxy
 import (
 	"bufio"
 	"context"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -89,4 +91,67 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 		// ok
 	default:
 	}
+}
+
+func BenchmarkHTTPProxyDirect(b *testing.B) {
+	b.ReportAllocs()
+	b.SetBytes(1)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer upstream.Close()
+
+	upstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	cfg := Config{
+		DialTimeout:       2 * time.Second,
+		HTTPHeaderTimeout: 2 * time.Second,
+		Forward:           NewDirectForwarder(Config{DialTimeout: 2 * time.Second}),
+	}
+
+	ln, err := ListenTCP("tcp", "127.0.0.1:0", net.KeepAliveConfig{Enable: false})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer ln.Close()
+
+	srv := NewHTTPProxyServer(cfg, 1*time.Second)
+	go func() { _ = srv.Serve(ln) }()
+	defer srv.Close()
+
+	proxyURL, err := url.Parse("http://" + ln.Addr().String())
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	tr := &http.Transport{
+		Proxy: http.ProxyURL(proxyURL),
+	}
+	defer tr.CloseIdleConnections()
+
+	client := &http.Client{Transport: tr}
+
+	b.RunParallel(func(pb *testing.PB) {
+		req, err := http.NewRequest(http.MethodGet, upstreamURL.String(), nil)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		for pb.Next() {
+			resp, err := client.Do(req)
+			if err != nil {
+				b.Fatal(err)
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				b.Fatalf("expected %d got %d", http.StatusOK, resp.StatusCode)
+			}
+		}
+	})
 }
