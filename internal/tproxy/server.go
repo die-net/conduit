@@ -12,7 +12,7 @@ import (
 type Server struct {
 	KeepAlive net.KeepAliveConfig
 	IOTimeout time.Duration
-	Forward   dialer.Forwarder
+	Forward   dialer.Dialer
 }
 
 func NewServer(cfg proxy.Config) *Server {

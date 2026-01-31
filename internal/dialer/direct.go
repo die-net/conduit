@@ -6,15 +6,15 @@ import (
 	"net"
 )
 
-type directForwarder struct {
+type directDialer struct {
 	cfg Config
 }
 
-func NewDirectForwarder(cfg Config) Forwarder {
-	return &directForwarder{cfg: cfg}
+func NewDirectDialer(cfg Config) Dialer {
+	return &directDialer{cfg: cfg}
 }
 
-func (f *directForwarder) Dial(ctx context.Context, network, address string) (net.Conn, error) {
+func (f *directDialer) Dial(ctx context.Context, network, address string) (net.Conn, error) {
 	dd := net.Dialer{Timeout: f.cfg.DialTimeout}
 
 	conn, err := dd.DialContext(ctx, network, address)

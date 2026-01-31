@@ -14,5 +14,5 @@ type Config struct {
 
 	KeepAlive net.KeepAliveConfig
 
-	Forward dialer.Forwarder
+	Forward dialer.Dialer
 }
