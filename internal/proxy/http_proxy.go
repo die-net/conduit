@@ -1,12 +1,12 @@
 package proxy
 
 import (
-	"context"
 	"crypto/tls"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -118,11 +118,21 @@ var clientSessionCache = tls.NewLRUClientSessionCache(0)
 
 func newForwardingTransport(cfg Config) http.RoundTripper {
 	ft := &forwardingTransport{}
+
+	proxyFunc := func(*http.Request) (*url.URL, error) { return nil, nil }
+	dial := cfg.Forward.Dial
+
+	// For non-CONNECT HTTP proxying, prefer the standard library proxy support when the
+	// configured forwarder is an HTTP upstream.
+	if up, ok := cfg.Forward.(*httpUpstreamForwarder); ok {
+		proxyFunc = http.ProxyURL(&url.URL{Scheme: "http", Host: up.upAddr})
+		// When using Transport.Proxy, DialContext is used to connect to the proxy itself.
+		dial = up.direct.Dial
+	}
+
 	ft.base = http.Transport{
-		Proxy: nil,
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return cfg.Forward.Dial(ctx, network, addr)
-		},
+		Proxy:               proxyFunc,
+		DialContext:         dial,
 		ForceAttemptHTTP2:   true,
 		MaxIdleConns:        2048,
 		MaxIdleConnsPerHost: 1024,
