@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -25,6 +26,7 @@ func main() {
 		httpListen   = pflag.String("http-listen", "", "HTTP proxy listen address (e.g. 127.0.0.1:8080). Empty disables.")
 		socksListen  = pflag.String("socks5-listen", "", "SOCKS5 proxy listen address (e.g. 127.0.0.1:1080). Empty disables.")
 		tproxyListen = pflag.String("tproxy-listen", "", "Transparent proxy listen address (Linux only). Empty disables.")
+		debugListen  = pflag.String("debug-listen", "", "Debug HTTP listen address exposing /debug/pprof (e.g. 127.0.0.1:6060). Empty disables.")
 
 		upstreamMode = pflag.String("upstream-mode", "direct", "Forwarding mode: direct|http|socks5")
 		upstreamAddr = pflag.String("upstream-addr", "", "Upstream proxy address (IP:port) for upstream-mode http or socks5")
@@ -77,7 +79,24 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	errCh := make(chan error, 3)
+	errCh := make(chan error, 4)
+
+	if *debugListen != "" {
+		debugSrv := &http.Server{Handler: http.DefaultServeMux}
+		debugLn, err := net.Listen("tcp", *debugListen)
+		if err != nil {
+			log.Fatalf("debug listen: %v", err)
+		}
+		go func() {
+			<-ctx.Done()
+			_ = debugSrv.Close()
+			_ = debugLn.Close()
+		}()
+		go func() {
+			errCh <- debugSrv.Serve(debugLn)
+		}()
+		log.Printf("debug listening on %s", *debugListen)
+	}
 
 	if *httpListen != "" {
 		ln, err := proxy.ListenTCP("tcp", *httpListen, cfg.KeepAlive)
