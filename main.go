@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -29,24 +30,28 @@ func main() {
 		tproxyListen = pflag.String("tproxy-listen", "", "Transparent proxy listen address (Linux only). Empty disables.")
 		debugListen  = pflag.String("debug-listen", "", "Debug HTTP listen address exposing /debug/pprof (e.g. 127.0.0.1:6060). Empty disables.")
 
-		upstreamMode = pflag.String("upstream-mode", "direct", "Forwarding mode: direct|http|socks5")
-		upstreamAddr = pflag.String("upstream-addr", "", "Upstream proxy address (IP:port) for upstream-mode http or socks5")
+		upstream = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port")
 
-		dialTimeout        = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound TCP dials")
+		dialTimeout        = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound DNS lookup and TCP connect")
 		negotiationTimeout = pflag.Duration("negotiation-timeout", 10*time.Second, "Timeout for protocol negotiation to set up connection")
-		httpIdleTimeout    = pflag.Duration("http-idle-timeout", 4*time.Minute, "Idle timeout for HTTP proxy server")
+		httpIdleTimeout    = pflag.Duration("http-idle-timeout", 4*time.Minute, "Timeout for idle HTTP connections")
 
 		tcpKeepAlive = pflag.String("tcp-keepalive", "45:45:3", "TCP keepalive: on|off|keepidle:keepintvl:keepcnt")
 	)
 
 	pflag.Parse()
 
-	mode := strings.ToLower(strings.TrimSpace(*upstreamMode))
-	if mode != "direct" && mode != "http" && mode != "socks5" {
-		log.Fatalf("invalid --upstream-mode: %q", *upstreamMode)
+	upURL, err := url.Parse(strings.TrimSpace(*upstream))
+	if err != nil {
+		log.Fatalf("invalid --upstream: %v", err)
 	}
-	if (mode == "http" || mode == "socks5") && strings.TrimSpace(*upstreamAddr) == "" {
-		log.Fatalf("--upstream-addr is required for --upstream-mode=%s", mode)
+
+	upScheme := strings.ToLower(strings.TrimSpace(upURL.Scheme))
+	if upScheme == "" {
+		log.Fatalf("invalid --upstream: missing scheme")
+	}
+	if upScheme != "direct" && upScheme != "http" && upScheme != "https" && upScheme != "socks5" {
+		log.Fatalf("invalid --upstream scheme: %q", upURL.Scheme)
 	}
 
 	ka, err := parseTCPKeepAlive(*tcpKeepAlive)
@@ -69,15 +74,41 @@ func main() {
 		KeepAlive:          cfg.KeepAlive,
 	}
 
-	switch mode {
+	switch upScheme {
 	case "direct":
 		cfg.Dialer = dialer.NewDirectDialer(dialCfg)
-	case "http":
-		cfg.Dialer = dialer.NewHTTPProxyDialer(dialCfg, *upstreamAddr)
-	case "socks5":
-		cfg.Dialer = dialer.NewSOCKS5ProxyDialer(dialCfg, *upstreamAddr)
+	case "http", "https", "socks5":
+		if strings.TrimSpace(upURL.Host) == "" {
+			log.Fatalf("invalid --upstream: missing host")
+		}
+		_, port, err := net.SplitHostPort(upURL.Host)
+		if err != nil {
+			switch upScheme {
+			case "http":
+				upURL.Host = net.JoinHostPort(upURL.Host, "80")
+			case "https":
+				upURL.Host = net.JoinHostPort(upURL.Host, "443")
+			case "socks5":
+				upURL.Host = net.JoinHostPort(upURL.Host, "1080")
+			}
+		} else if port == "" {
+			log.Fatalf("invalid --upstream: missing port")
+		}
+
+		var user, pass string
+		if upURL.User != nil {
+			user = upURL.User.Username()
+			pass, _ = upURL.User.Password()
+		}
+
+		switch upScheme {
+		case "http", "https":
+			cfg.Dialer = dialer.NewHTTPProxyDialer(dialCfg, upURL, user, pass)
+		case "socks5":
+			cfg.Dialer = dialer.NewSOCKS5ProxyDialer(dialCfg, upURL.Host, user, pass)
+		}
 	default:
-		log.Fatalf("unreachable upstream mode")
+		log.Fatalf("unreachable upstream scheme")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

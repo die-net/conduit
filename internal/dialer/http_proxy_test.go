@@ -3,9 +3,11 @@ package dialer
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"testing"
 	"time"
@@ -76,7 +78,11 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 		_, _ = io.Copy(c, dst)
 	}()
 
-	f := NewHTTPProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String())
+	proxyURL, err := url.Parse("http://" + upLn.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := NewHTTPProxyDialer(Config{DialTimeout: 2 * time.Second}, proxyURL, "", "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -97,6 +103,64 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 	}
 	if string(buf) != string(msg) {
 		t.Fatalf("expected %q got %q", string(msg), string(buf))
+	}
+
+	_ = upLn.Close()
+	wg.Wait()
+}
+
+func TestHTTPProxyDialerDialAuthHeader(t *testing.T) {
+	upLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer upLn.Close()
+
+	gotAuth := make(chan string, 1)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c, err := upLn.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+
+		br := bufio.NewReader(c)
+		req, err := http.ReadRequest(br)
+		if err != nil {
+			return
+		}
+		_ = req.Body.Close()
+		gotAuth <- req.Header.Get("Proxy-Authorization")
+		_, _ = io.WriteString(c, "HTTP/1.1 200 Connection Established\r\n\r\n")
+	}()
+
+	proxyURL, err := url.Parse("http://user:pass@" + upLn.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := NewHTTPProxyDialer(Config{DialTimeout: 2 * time.Second}, proxyURL, "user", "pass")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	conn, err := f.DialContext(ctx, "tcp", "127.0.0.1:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.Close()
+
+	select {
+	case got := <-gotAuth:
+		exp := "Basic " + base64.StdEncoding.EncodeToString([]byte("user:pass"))
+		if got != exp {
+			t.Fatalf("expected %q got %q", exp, got)
+		}
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for proxy auth header")
 	}
 
 	_ = upLn.Close()
@@ -130,7 +194,11 @@ func TestHTTPProxyDialerDialNon2xx(t *testing.T) {
 		_, _ = io.WriteString(c, "HTTP/1.1 403 Forbidden\r\n\r\n")
 	}()
 
-	f := NewHTTPProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String())
+	proxyURL, err := url.Parse("http://" + upLn.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := NewHTTPProxyDialer(Config{DialTimeout: 2 * time.Second}, proxyURL, "", "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

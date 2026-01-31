@@ -47,7 +47,7 @@ HTTP proxy (direct):
 ```bash
 conduit \
   --http-listen 127.0.0.1:8080 \
-  --upstream-mode direct
+  --upstream direct://
 ```
 
 SOCKS5 proxy (direct):
@@ -55,7 +55,7 @@ SOCKS5 proxy (direct):
 ```bash
 conduit \
   --socks5-listen 127.0.0.1:1080 \
-  --upstream-mode direct
+  --upstream direct://
 ```
 
 HTTP proxy that forwards outbound connections via an upstream HTTP proxy:
@@ -63,8 +63,7 @@ HTTP proxy that forwards outbound connections via an upstream HTTP proxy:
 ```bash
 conduit \
   --http-listen 127.0.0.1:8080 \
-  --upstream-mode http \
-  --upstream-addr 10.0.0.2:3128
+  --upstream http://10.0.0.2:3128
 ```
 
 HTTP proxy that forwards outbound connections via an upstream SOCKS5 proxy:
@@ -72,8 +71,7 @@ HTTP proxy that forwards outbound connections via an upstream SOCKS5 proxy:
 ```bash
 conduit \
   --http-listen 127.0.0.1:8080 \
-  --upstream-mode socks5 \
-  --upstream-addr 10.0.0.3:1080
+  --upstream socks5://10.0.0.3:1080
 ```
 
 ## Flags
@@ -86,8 +84,7 @@ Listener flags (any can be omitted to disable that listener):
 
 Forwarding flags:
 
-- `--upstream-mode=direct|http|socks5`
-- `--upstream-addr=IP:port` (required for `http` and `socks5` upstream modes)
+- `--upstream=direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port`
 
 Timeout behavior:
 

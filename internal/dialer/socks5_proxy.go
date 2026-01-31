@@ -12,11 +12,13 @@ import (
 type SOCKS5ProxyDialer struct {
 	cfg       Config
 	proxyAddr string
+	username  string
+	password  string
 	direct    Dialer
 }
 
-func NewSOCKS5ProxyDialer(cfg Config, proxyAddr string) Dialer {
-	return &SOCKS5ProxyDialer{cfg: cfg, proxyAddr: proxyAddr, direct: NewDirectDialer(cfg)}
+func NewSOCKS5ProxyDialer(cfg Config, proxyAddr, username, password string) Dialer {
+	return &SOCKS5ProxyDialer{cfg: cfg, proxyAddr: proxyAddr, username: username, password: password, direct: NewDirectDialer(cfg)}
 }
 
 func (f *SOCKS5ProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
@@ -47,7 +49,11 @@ func (f *SOCKS5ProxyDialer) DialContext(ctx context.Context, network, address st
 		_ = c.SetDeadline(deadline)
 	}
 
-	if _, err := socks5.NewNegotiationRequest([]byte{socks5.MethodNone}).WriteTo(c); err != nil {
+	methods := []byte{socks5.MethodNone}
+	if f.username != "" {
+		methods = append(methods, socks5.MethodUsernamePassword)
+	}
+	if _, err := socks5.NewNegotiationRequest(methods).WriteTo(c); err != nil {
 		_ = c.Close()
 		return nil, fmt.Errorf("socks5 proxy connect write negotiation: %w", err)
 	}
@@ -56,7 +62,25 @@ func (f *SOCKS5ProxyDialer) DialContext(ctx context.Context, network, address st
 		_ = c.Close()
 		return nil, fmt.Errorf("socks5 proxy connect read negotiation: %w", err)
 	}
-	if neg.Method != socks5.MethodNone {
+	if neg.Method == socks5.MethodUsernamePassword {
+		if f.username == "" {
+			_ = c.Close()
+			return nil, fmt.Errorf("socks5 proxy connect negotiation failed")
+		}
+		if _, err := socks5.NewUserPassNegotiationRequest([]byte(f.username), []byte(f.password)).WriteTo(c); err != nil {
+			_ = c.Close()
+			return nil, fmt.Errorf("socks5 proxy connect write userpass: %w", err)
+		}
+		rep, err := socks5.NewUserPassNegotiationReplyFrom(c)
+		if err != nil {
+			_ = c.Close()
+			return nil, fmt.Errorf("socks5 proxy connect read userpass: %w", err)
+		}
+		if rep.Status != socks5.UserPassStatusSuccess {
+			_ = c.Close()
+			return nil, fmt.Errorf("socks5 proxy connect auth failed")
+		}
+	} else if neg.Method != socks5.MethodNone {
 		_ = c.Close()
 		return nil, fmt.Errorf("socks5 proxy connect negotiation failed")
 	}

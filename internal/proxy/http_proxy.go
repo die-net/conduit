@@ -126,7 +126,7 @@ func newForwardingTransport(cfg Config) http.RoundTripper {
 	// For non-CONNECT HTTP proxying, prefer the standard library proxy support when the
 	// configured dialer is an HTTP proxy.
 	if up, ok := cfg.Dialer.(*dialer.HTTPProxyDialer); ok {
-		proxyFunc = http.ProxyURL(&url.URL{Scheme: "http", Host: up.ProxyAddr()})
+		proxyFunc = http.ProxyURL(up.ProxyURL())
 		// When using Transport.Proxy, DialContext is used to connect to the proxy itself.
 		dial = up.Direct().DialContext
 	}
