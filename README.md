@@ -82,6 +82,11 @@ Listener flags (any can be omitted to disable that listener):
 - `--socks5-listen=IP:port`
 - `--tproxy-listen=IP:port` (Linux only)
 
+Debug flags:
+
+- `--debug-listen=IP:port` (enables `/debug/pprof`)
+- `--verbose` (default: false): log per-connection errors.
+
 Forwarding flags:
 
 - `--upstream=direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port`

@@ -44,7 +44,7 @@ func run() error {
 		httpIdleTimeout    = pflag.Duration("http-idle-timeout", 4*time.Minute, "Timeout for idle HTTP connections")
 
 		tcpKeepAlive = pflag.String("tcp-keepalive", "45:45:3", "TCP keepalive: on|off|keepidle:keepintvl:keepcnt")
-		verbose      = pflag.Bool("verbose", false, "Enable verbose per-connection error logging")
+		verbose      = pflag.Bool("verbose", false, "Enable per-connection error logging")
 	)
 
 	pflag.Parse()
