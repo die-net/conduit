@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 
@@ -18,13 +19,19 @@ func CopyBidirectional(ctx context.Context, left, right net.Conn) error {
 	g.Go(func() error {
 		_, err := io.Copy(left, right)
 		cancel()
-		return err
+		if err != nil {
+			return fmt.Errorf("copy right->left: %w", err)
+		}
+		return nil
 	})
 
 	g.Go(func() error {
 		_, err := io.Copy(right, left)
 		cancel()
-		return err
+		if err != nil {
+			return fmt.Errorf("copy left->right: %w", err)
+		}
+		return nil
 	})
 
 	// When the context is canceled, ensure we close both sides to unblock Copy.
@@ -32,5 +39,8 @@ func CopyBidirectional(ctx context.Context, left, right net.Conn) error {
 	_ = left.Close()
 	_ = right.Close()
 
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("bidirectional copy: %w", err)
+	}
+	return nil
 }

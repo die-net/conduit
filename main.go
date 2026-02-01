@@ -24,6 +24,13 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	var (
 		httpListen   = pflag.String("http-listen", "", "HTTP proxy listen address (e.g. 127.0.0.1:8080). Empty disables.")
 		socksListen  = pflag.String("socks5-listen", "", "SOCKS5 proxy listen address (e.g. 127.0.0.1:1080). Empty disables.")
@@ -37,30 +44,31 @@ func main() {
 		httpIdleTimeout    = pflag.Duration("http-idle-timeout", 4*time.Minute, "Timeout for idle HTTP connections")
 
 		tcpKeepAlive = pflag.String("tcp-keepalive", "45:45:3", "TCP keepalive: on|off|keepidle:keepintvl:keepcnt")
+		verbose      = pflag.Bool("verbose", false, "Enable verbose per-connection error logging")
 	)
 
 	pflag.Parse()
 
 	upURL, err := url.Parse(strings.TrimSpace(*upstream))
 	if err != nil {
-		log.Fatalf("invalid --upstream: %v", err)
+		return fmt.Errorf("invalid --upstream: %w", err)
 	}
 
 	upScheme := strings.ToLower(strings.TrimSpace(upURL.Scheme))
 	if upScheme == "" {
-		log.Fatalf("invalid --upstream: missing scheme")
+		return fmt.Errorf("invalid --upstream: missing scheme")
 	}
 	if upScheme != "direct" && upScheme != "http" && upScheme != "https" && upScheme != "socks5" {
-		log.Fatalf("invalid --upstream scheme: %q", upURL.Scheme)
+		return fmt.Errorf("invalid --upstream scheme: %q", upURL.Scheme)
 	}
 
 	ka, err := parseTCPKeepAlive(*tcpKeepAlive)
 	if err != nil {
-		log.Fatalf("invalid --tcp-keepalive: %v", err)
+		return fmt.Errorf("invalid --tcp-keepalive: %w", err)
 	}
 
 	if *httpListen == "" && *socksListen == "" && *tproxyListen == "" {
-		log.Fatalf("no listeners enabled (set at least one of --http-listen, --socks5-listen, --tproxy-listen)")
+		return fmt.Errorf("no listeners enabled (set at least one of --http-listen, --socks5-listen, --tproxy-listen)")
 	}
 
 	cfg := proxy.Config{
@@ -79,7 +87,7 @@ func main() {
 		cfg.Dialer = dialer.NewDirectDialer(dialCfg)
 	case "http", "https", "socks5":
 		if strings.TrimSpace(upURL.Host) == "" {
-			log.Fatalf("invalid --upstream: missing host")
+			return fmt.Errorf("invalid --upstream: missing host")
 		}
 		_, port, err := net.SplitHostPort(upURL.Host)
 		if err != nil {
@@ -92,7 +100,7 @@ func main() {
 				upURL.Host = net.JoinHostPort(upURL.Host, "1080")
 			}
 		} else if port == "" {
-			log.Fatalf("invalid --upstream: missing port")
+			return fmt.Errorf("invalid --upstream: missing port")
 		}
 
 		var user, pass string
@@ -108,7 +116,7 @@ func main() {
 			cfg.Dialer = dialer.NewSOCKS5ProxyDialer(dialCfg, upURL.Host, user, pass)
 		}
 	default:
-		log.Fatalf("unreachable upstream scheme")
+		return fmt.Errorf("unreachable upstream scheme")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -120,7 +128,7 @@ func main() {
 		debugSrv := &http.Server{Handler: http.DefaultServeMux}
 		debugLn, err := net.Listen("tcp", *debugListen)
 		if err != nil {
-			log.Fatalf("debug listen: %v", err)
+			return fmt.Errorf("debug listen: %w", err)
 		}
 		go func() {
 			<-ctx.Done()
@@ -128,7 +136,9 @@ func main() {
 			_ = debugLn.Close()
 		}()
 		go func() {
-			errCh <- debugSrv.Serve(debugLn)
+			if err := debugSrv.Serve(debugLn); err != nil {
+				errCh <- fmt.Errorf("debug serve: %w", err)
+			}
 		}()
 		log.Printf("debug listening on %s", *debugListen)
 	}
@@ -136,7 +146,7 @@ func main() {
 	if *httpListen != "" {
 		ln, err := proxy.ListenTCP("tcp", *httpListen, cfg.KeepAlive)
 		if err != nil {
-			log.Fatalf("http listen: %v", err)
+			return fmt.Errorf("http listen: %w", err)
 		}
 		srv := proxy.NewHTTPProxyServer(ctx, cfg, *httpIdleTimeout)
 		go func() {
@@ -145,7 +155,9 @@ func main() {
 			_ = ln.Close()
 		}()
 		go func() {
-			errCh <- srv.Serve(ln)
+			if err := srv.Serve(ln); err != nil {
+				errCh <- fmt.Errorf("http proxy serve: %w", err)
+			}
 		}()
 		log.Printf("http proxy listening on %s", *httpListen)
 	}
@@ -153,15 +165,17 @@ func main() {
 	if *socksListen != "" {
 		ln, err := proxy.ListenTCP("tcp", *socksListen, cfg.KeepAlive)
 		if err != nil {
-			log.Fatalf("socks5 listen: %v", err)
+			return fmt.Errorf("socks5 listen: %w", err)
 		}
-		s5 := proxy.NewSOCKS5Server(ctx, cfg)
+		s5 := proxy.NewSOCKS5Server(ctx, cfg, *verbose)
 		go func() {
 			<-ctx.Done()
 			_ = ln.Close()
 		}()
 		go func() {
-			errCh <- s5.Serve(ln)
+			if err := s5.Serve(ln); err != nil {
+				errCh <- fmt.Errorf("socks5 serve: %w", err)
+			}
 		}()
 		log.Printf("socks5 proxy listening on %s", *socksListen)
 	}
@@ -169,15 +183,17 @@ func main() {
 	if *tproxyListen != "" {
 		ln, err := tproxy.ListenTransparentTCP(*tproxyListen, cfg.KeepAlive)
 		if err != nil {
-			log.Fatalf("tproxy listen: %v", err)
+			return fmt.Errorf("tproxy listen: %w", err)
 		}
-		tsrv := tproxy.NewServer(ctx, cfg)
+		tsrv := tproxy.NewServer(ctx, cfg, *verbose)
 		go func() {
 			<-ctx.Done()
 			_ = ln.Close()
 		}()
 		go func() {
-			errCh <- tsrv.Serve(ln)
+			if err := tsrv.Serve(ln); err != nil {
+				errCh <- fmt.Errorf("tproxy serve: %w", err)
+			}
 		}()
 		log.Printf("tproxy listening on %s", *tproxyListen)
 	}
@@ -187,7 +203,7 @@ func main() {
 		log.Printf("shutting down")
 	case err := <-errCh:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("server error: %v", err)
+			return fmt.Errorf("server error: %w", err)
 		}
 	}
 
@@ -200,9 +216,9 @@ func main() {
 			if errors.Is(err, net.ErrClosed) || errors.Is(err, http.ErrServerClosed) {
 				continue
 			}
-			fmt.Fprintln(os.Stderr, err)
+			return fmt.Errorf("server error: %w", err)
 		default:
-			return
+			return nil
 		}
 	}
 }

@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -9,28 +11,35 @@ import (
 )
 
 type SOCKS5Server struct {
-	ctx context.Context
-	cfg Config
+	ctx     context.Context
+	cfg     Config
+	Verbose bool
 }
 
-func NewSOCKS5Server(ctx context.Context, cfg Config) *SOCKS5Server {
+func NewSOCKS5Server(ctx context.Context, cfg Config, verbose bool) *SOCKS5Server {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return &SOCKS5Server{ctx: ctx, cfg: cfg}
+	return &SOCKS5Server{ctx: ctx, cfg: cfg, Verbose: verbose}
 }
 
 func (s *SOCKS5Server) Serve(ln net.Listener) error {
 	for {
 		c, err := ln.Accept()
 		if err != nil {
-			return err
+			return fmt.Errorf("accept: %w", err)
 		}
-		go s.handleConn(c)
+		go func() {
+			if err := s.handleConn(c); err != nil {
+				if s.Verbose {
+					log.Printf("socks5: connection error: %v", err)
+				}
+			}
+		}()
 	}
 }
 
-func (s *SOCKS5Server) handleConn(conn net.Conn) {
+func (s *SOCKS5Server) handleConn(conn net.Conn) error {
 	defer conn.Close()
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
@@ -42,17 +51,17 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) {
 	// negotiation (no-auth only)
 	neg, err := socks5.NewNegotiationRequestFrom(conn)
 	if err != nil {
-		return
+		return fmt.Errorf("negotiation request: %w", err)
 	}
 	_ = neg
 	if _, err := socks5.NewNegotiationReply(socks5.MethodNone).WriteTo(conn); err != nil {
-		return
+		return fmt.Errorf("negotiation reply: %w", err)
 	}
 
 	// request
 	req, err := socks5.NewRequestFrom(conn)
 	if err != nil {
-		return
+		return fmt.Errorf("request: %w", err)
 	}
 	if req.Cmd != socks5.CmdConnect {
 		var rep *socks5.Reply
@@ -62,7 +71,7 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) {
 			rep = socks5.NewReply(socks5.RepCommandNotSupported, socks5.ATYPIPv4, []byte{0x00, 0x00, 0x00, 0x00}, []byte{0x00, 0x00})
 		}
 		_, _ = rep.WriteTo(conn)
-		return
+		return fmt.Errorf("unsupported command: %d", req.Cmd)
 	}
 
 	dst := req.Address()
@@ -76,19 +85,19 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) {
 			rep = socks5.NewReply(socks5.RepConnectionRefused, socks5.ATYPIPv4, []byte{0x00, 0x00, 0x00, 0x00}, []byte{0x00, 0x00})
 		}
 		_, _ = rep.WriteTo(conn)
-		return
+		return fmt.Errorf("dial %s: %w", dst, err)
 	}
 	defer up.Close()
 
 	a, addr, port, err := socks5.ParseAddress(up.LocalAddr().String())
 	if err != nil {
-		return
+		return fmt.Errorf("parse local address %q: %w", up.LocalAddr().String(), err)
 	}
 	if a == socks5.ATYPDomain {
 		addr = addr[1:]
 	}
 	if _, err := socks5.NewReply(socks5.RepSuccess, a, addr, port).WriteTo(conn); err != nil {
-		return
+		return fmt.Errorf("success reply: %w", err)
 	}
 
 	if s.cfg.NegotiationTimeout > 0 {
@@ -96,5 +105,8 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) {
 	}
 
 	// Once we've finished the SOCKS5 handshake, switch to bidirectional proxying.
-	_ = CopyBidirectional(ctx, conn, up)
+	if err := CopyBidirectional(ctx, conn, up); err != nil {
+		return fmt.Errorf("proxy: %w", err)
+	}
+	return nil
 }
