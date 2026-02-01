@@ -48,7 +48,6 @@ linters:
       keywords:
         - FIXME
     govet:
-      settings:
       enable:
         - nilness
         - shadow

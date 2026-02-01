@@ -9,14 +9,15 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/die-net/conduit/internal/proxy"
 	"golang.org/x/sys/unix"
+
+	"github.com/die-net/conduit/internal/proxy"
 )
 
 // ListenTransparentTCP listens on addr and enables IP_TRANSPARENT so the socket can accept redirected
 // connections (typical TPROXY setup). Note: you still need appropriate iptables/nft rules.
 func ListenTransparentTCP(addr string, keepAliveConfig net.KeepAliveConfig) (net.Listener, error) {
-	lc := net.ListenConfig{Control: func(network, address string, c syscall.RawConn) error {
+	lc := net.ListenConfig{Control: func(_, _ string, c syscall.RawConn) error {
 		var ctrlErr error
 		err := c.Control(func(fd uintptr) {
 			ctrlErr = syscall.SetsockoptInt(int(fd), syscall.SOL_IP, syscall.IP_TRANSPARENT, 1)
@@ -58,13 +59,13 @@ func OriginalDst(c net.Conn) (*net.TCPAddr, bool) {
 	}
 
 	if isV6(tc) {
-		return originalDstV6(rc, tc)
+		return originalDstV6(rc)
 	}
 
-	return originalDstV4(rc, tc)
+	return originalDstV4(rc)
 }
 
-func originalDstV4(rc syscall.RawConn, tc *net.TCPConn) (*net.TCPAddr, bool) {
+func originalDstV4(rc syscall.RawConn) (*net.TCPAddr, bool) {
 	success := false
 	var addr *net.TCPAddr
 
@@ -75,17 +76,17 @@ func originalDstV4(rc syscall.RawConn, tc *net.TCPConn) (*net.TCPAddr, bool) {
 		sz := uint32(len(raw))
 		_, _, e := unix.Syscall6(
 			unix.SYS_GETSOCKOPT,
-			uintptr(fd),
+			fd,
 			uintptr(unix.IPPROTO_IP),
 			uintptr(unix.SO_ORIGINAL_DST),
-			uintptr(unsafe.Pointer(&raw[0])),
-			uintptr(unsafe.Pointer(&sz)),
+			uintptr(unsafe.Pointer(&raw[0])), //nolint:gosec // unsafe is needed for syscalls.
+			uintptr(unsafe.Pointer(&sz)),     //nolint:gosec // unsafe is needed for syscalls.
 			0,
 		)
 		if e != 0 || sz < uint32(unsafe.Sizeof(unix.RawSockaddrInet4{})) {
 			return
 		}
-		sa := (*unix.RawSockaddrInet4)(unsafe.Pointer(&raw[0]))
+		sa := (*unix.RawSockaddrInet4)(unsafe.Pointer(&raw[0])) //nolint:gosec // unsafe is needed for syscalls.
 		if sa.Family != unix.AF_INET {
 			return
 		}
@@ -94,13 +95,12 @@ func originalDstV4(rc syscall.RawConn, tc *net.TCPConn) (*net.TCPAddr, bool) {
 		ip := net.IPv4(sa.Addr[0], sa.Addr[1], sa.Addr[2], sa.Addr[3])
 		addr = &net.TCPAddr{IP: ip, Port: port}
 		success = true
-		return
 	})
 
 	return addr, success
 }
 
-func originalDstV6(rc syscall.RawConn, tc *net.TCPConn) (*net.TCPAddr, bool) {
+func originalDstV6(rc syscall.RawConn) (*net.TCPAddr, bool) {
 	success := false
 	var addr *net.TCPAddr
 
@@ -111,17 +111,17 @@ func originalDstV6(rc syscall.RawConn, tc *net.TCPConn) (*net.TCPAddr, bool) {
 		sz := uint32(len(raw))
 		_, _, e := unix.Syscall6(
 			unix.SYS_GETSOCKOPT,
-			uintptr(fd),
+			fd,
 			uintptr(unix.IPPROTO_IPV6),
 			uintptr(unix.SO_ORIGINAL_DST),
-			uintptr(unsafe.Pointer(&raw[0])),
-			uintptr(unsafe.Pointer(&sz)),
+			uintptr(unsafe.Pointer(&raw[0])), //nolint:gosec // unsafe is needed for syscalls.
+			uintptr(unsafe.Pointer(&sz)),     //nolint:gosec // unsafe is needed for syscalls.
 			0,
 		)
 		if e != 0 || sz < uint32(unsafe.Sizeof(unix.RawSockaddrInet6{})) {
 			return
 		}
-		sa := (*unix.RawSockaddrInet6)(unsafe.Pointer(&raw[0]))
+		sa := (*unix.RawSockaddrInet6)(unsafe.Pointer(&raw[0])) //nolint:gosec // unsafe is needed for syscalls.
 		if sa.Family != unix.AF_INET6 {
 			return
 		}
