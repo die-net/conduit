@@ -3,7 +3,7 @@ module github.com/die-net/conduit
 go 1.24.0
 
 require (
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.10
 	github.com/txthinking/socks5 v0.0.0-20251011041537-5c31f201a10e
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.40.0
