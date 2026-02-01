@@ -115,8 +115,6 @@ type forwardingTransport struct {
 	base http.Transport
 }
 
-var clientSessionCache = tls.NewLRUClientSessionCache(0)
-
 func newForwardingTransport(cfg Config) http.RoundTripper {
 	ft := &forwardingTransport{}
 
@@ -141,7 +139,7 @@ func newForwardingTransport(cfg Config) http.RoundTripper {
 		TLSHandshakeTimeout: 10 * time.Second,
 		TLSClientConfig: &tls.Config{
 			MinVersion:         tls.VersionTLS12,
-			ClientSessionCache: clientSessionCache,
+			ClientSessionCache: tls.NewLRUClientSessionCache(0),
 		},
 	}
 	return ft
