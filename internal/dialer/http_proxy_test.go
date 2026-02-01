@@ -2,6 +2,7 @@ package dialer
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"io"
@@ -14,7 +15,11 @@ import (
 )
 
 func TestHTTPProxyDialerDialSuccess(t *testing.T) {
-	echoLn, err := net.Listen("tcp", "127.0.0.1:0")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	lc := net.ListenConfig{}
+	echoLn, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +40,7 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 		_, _ = c.Write(buf[:n])
 	}()
 
-	upLn, err := net.Listen("tcp", "127.0.0.1:0")
+	upLn, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +67,8 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 		target := req.Host
 		_ = req.Body.Close()
 
-		dst, err := net.Dial("tcp", target)
+		d := net.Dialer{}
+		dst, err := d.DialContext(ctx, "tcp", target)
 		if err != nil {
 			_, _ = io.WriteString(c, "HTTP/1.1 502 Bad Gateway\r\n\r\n")
 			return
@@ -84,9 +90,6 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 	}
 	f := NewHTTPProxyDialer(Config{DialTimeout: 2 * time.Second}, proxyURL, "", "")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
 	conn, err := f.DialContext(ctx, "tcp", echoLn.Addr().String())
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +104,7 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 	if _, err := io.ReadFull(conn, buf); err != nil {
 		t.Fatal(err)
 	}
-	if string(buf) != string(msg) {
+	if !bytes.Equal(buf, msg) {
 		t.Fatalf("expected %q got %q", string(msg), string(buf))
 	}
 
@@ -110,7 +113,11 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 }
 
 func TestHTTPProxyDialerDialAuthHeader(t *testing.T) {
-	upLn, err := net.Listen("tcp", "127.0.0.1:0")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	lc := net.ListenConfig{}
+	upLn, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,9 +151,6 @@ func TestHTTPProxyDialerDialAuthHeader(t *testing.T) {
 	}
 	f := NewHTTPProxyDialer(Config{DialTimeout: 2 * time.Second}, proxyURL, "user", "pass")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
 	conn, err := f.DialContext(ctx, "tcp", "127.0.0.1:1")
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +172,11 @@ func TestHTTPProxyDialerDialAuthHeader(t *testing.T) {
 }
 
 func TestHTTPProxyDialerDialNon2xx(t *testing.T) {
-	upLn, err := net.Listen("tcp", "127.0.0.1:0")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	lc := net.ListenConfig{}
+	upLn, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,9 +207,6 @@ func TestHTTPProxyDialerDialNon2xx(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := NewHTTPProxyDialer(Config{DialTimeout: 2 * time.Second}, proxyURL, "", "")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
 
 	_, err = f.DialContext(ctx, "tcp", "127.0.0.1:1")
 	if err == nil {

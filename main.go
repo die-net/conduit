@@ -7,7 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" //nolint:gosec // Intentionally exposed on debug port.
 	"net/url"
 	"os"
 	"os/signal"
@@ -125,8 +125,9 @@ func run() error {
 	errCh := make(chan error, 4)
 
 	if *debugListen != "" {
-		debugSrv := &http.Server{Handler: http.DefaultServeMux}
-		debugLn, err := net.Listen("tcp", *debugListen)
+		debugSrv := &http.Server{Handler: http.DefaultServeMux} //nolint:gosec // Not concerned about timeouts on debug port.
+		lc := net.ListenConfig{KeepAliveConfig: cfg.KeepAlive}
+		debugLn, err := lc.Listen(ctx, "tcp", *debugListen)
 		if err != nil {
 			return fmt.Errorf("debug listen: %w", err)
 		}

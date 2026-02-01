@@ -45,7 +45,7 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) error {
 	defer cancel()
 
 	if s.cfg.NegotiationTimeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(time.Duration(s.cfg.NegotiationTimeout)))
+		_ = conn.SetDeadline(time.Now().Add(s.cfg.NegotiationTimeout))
 	}
 
 	// negotiation (no-auth only)

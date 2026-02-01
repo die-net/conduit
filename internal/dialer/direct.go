@@ -23,7 +23,7 @@ func (f *directDialer) DialContext(ctx context.Context, network, address string)
 	}
 
 	if tc, ok := conn.(*net.TCPConn); ok {
-		tc.SetKeepAliveConfig(f.cfg.KeepAlive)
+		_ = tc.SetKeepAliveConfig(f.cfg.KeepAlive)
 	}
 
 	return conn, nil

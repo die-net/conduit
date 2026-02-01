@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"io"
 	"net"
@@ -15,8 +16,12 @@ import (
 )
 
 func TestHTTPProxyConnectDirect(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
 	// simple echo server
-	echoLn, err := net.Listen("tcp", "127.0.0.1:0")
+	lc := net.ListenConfig{}
+	echoLn, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +54,8 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 	go func() { _ = srv.Serve(ln) }()
 	defer srv.Close()
 
-	c, err := net.Dial("tcp", ln.Addr().String())
+	d := net.Dialer{}
+	c, err := d.DialContext(ctx, "tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,9 +80,6 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 
 	_ = resp.Body.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
 	msg := []byte("hello")
 	if _, err := c.Write(msg); err != nil {
 		t.Fatal(err)
@@ -85,7 +88,7 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 	if _, err := br.Read(buf); err != nil {
 		t.Fatal(err)
 	}
-	if string(buf) != string(msg) {
+	if !bytes.Equal(buf, msg) {
 		t.Fatalf("expected %q got %q", string(msg), string(buf))
 	}
 
@@ -100,7 +103,7 @@ func BenchmarkHTTPProxyDirect(b *testing.B) {
 	b.ReportAllocs()
 	b.SetBytes(1)
 
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	}))
@@ -141,7 +144,7 @@ func BenchmarkHTTPProxyDirect(b *testing.B) {
 	client := &http.Client{Transport: tr}
 
 	b.RunParallel(func(pb *testing.PB) {
-		req, err := http.NewRequest(http.MethodGet, upstreamURL.String(), nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, upstreamURL.String(), http.NoBody)
 		if err != nil {
 			b.Fatal(err)
 		}

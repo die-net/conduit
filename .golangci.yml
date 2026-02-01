@@ -1,0 +1,91 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - dogsled
+    - dupl
+    - errcheck
+    - errorlint
+    - gocheckcompilerdirectives
+    - gochecknoinits
+    - gocritic
+    - godox
+    - goprintffuncname
+    - gosec
+    - govet
+    - intrange
+    - ineffassign
+    - misspell
+    - nakedret
+    - noctx
+    - nolintlint
+    - revive
+    - staticcheck
+    - testifylint
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+  settings:
+    dupl:
+      threshold: 100
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+      disabled-checks:
+        - ifElseChain
+        - octalLiteral
+        - whyNoLint
+    godox:
+      keywords:
+        - FIXME
+    govet:
+      settings:
+      enable:
+        - nilness
+        - shadow
+    errorlint:
+      asserts: false
+    misspell:
+      locale: US
+    nolintlint:
+      allow-unused: false # report any unused nolint directives
+      require-explanation: true # require an explanation for nolint directives
+      require-specific: true # require nolint directives to be specific about which linter is being skipped
+    revive:
+      rules:
+        - name: indent-error-flow
+        - name: unexported-return
+          disabled: true
+        - name: unused-parameter
+        - name: unused-receiver
+  exclusions:
+    rules:
+    - linters:
+        - govet
+      text: "shadow: declaration of \"err\" shadows declaration at"
+    - linters:
+        - errcheck
+      text: "Error return value of .*\\.Close. is not checked"
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofmt:
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
+    goimports:
+      local-prefixes:
+        - github.com/die-net/conduit
+

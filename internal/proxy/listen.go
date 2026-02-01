@@ -30,7 +30,7 @@ func (l *KeepAliveListener) Accept() (net.Conn, error) {
 
 	tc, ok := conn.(*net.TCPConn)
 	if ok {
-		tc.SetKeepAliveConfig(l.KeepAliveConfig)
+		_ = tc.SetKeepAliveConfig(l.KeepAliveConfig)
 	}
 
 	return conn, nil

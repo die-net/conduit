@@ -23,7 +23,7 @@ type HTTPProxyDialer struct {
 func NewHTTPProxyDialer(cfg Config, proxyURL *url.URL, username, password string) Dialer {
 	auth := ""
 	if username != "" {
-		auth = "Basic "+base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+		auth = "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
 	}
 
 	return &HTTPProxyDialer{
@@ -70,7 +70,7 @@ func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 		}
 		tlsConn := tls.Client(c, &tls.Config{MinVersion: tls.VersionTLS12, ServerName: hostname})
 		if f.cfg.NegotiationTimeout > 0 {
-			_ = tlsConn.SetDeadline(time.Now().Add(time.Duration(f.cfg.NegotiationTimeout)))
+			_ = tlsConn.SetDeadline(time.Now().Add(f.cfg.NegotiationTimeout))
 		}
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
 			_ = tlsConn.Close()
@@ -90,7 +90,7 @@ func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 	}
 
 	if f.cfg.NegotiationTimeout > 0 {
-		_ = c.SetDeadline(time.Now().Add(time.Duration(f.cfg.NegotiationTimeout)))
+		_ = c.SetDeadline(time.Now().Add(f.cfg.NegotiationTimeout))
 	}
 
 	if err := req.Write(c); err != nil {

@@ -3,7 +3,6 @@ package proxy
 import (
 	"context"
 	"crypto/tls"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -80,13 +79,13 @@ func (s *HTTPProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) 
 	}()
 	serverConn, err := s.cfg.Dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
-		_, _ = io.WriteString(brw, "HTTP/1.1 502 Bad Gateway\r\n\r\n")
+		_, _ = brw.WriteString("HTTP/1.1 502 Bad Gateway\r\n\r\n")
 		_ = brw.Flush()
-		clientConn.Close()
+		_ = clientConn.Close()
 		return
 	}
 
-	_, _ = io.WriteString(brw, "HTTP/1.1 200 Connection Established\r\n\r\n")
+	_, _ = brw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
 	_ = brw.Flush()
 
 	_ = CopyBidirectional(ctx, clientConn, serverConn)
@@ -111,7 +110,7 @@ func (s *HTTPProxyServer) newReverseProxy() *httputil.ReverseProxy {
 		r.Header["X-Forwarded-For"] = nil
 	}
 
-	errHandler := func(w http.ResponseWriter, r *http.Request, _ error) {
+	errHandler := func(w http.ResponseWriter, _ *http.Request, _ error) {
 		w.WriteHeader(http.StatusBadGateway)
 	}
 

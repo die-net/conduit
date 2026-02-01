@@ -32,7 +32,7 @@ func (f *SOCKS5ProxyDialer) DialContext(ctx context.Context, network, address st
 	}
 
 	if f.cfg.NegotiationTimeout > 0 {
-		_ = c.SetDeadline(time.Now().Add(time.Duration(f.cfg.NegotiationTimeout)))
+		_ = c.SetDeadline(time.Now().Add(f.cfg.NegotiationTimeout))
 	}
 
 	ctxDone := make(chan struct{})

@@ -1,18 +1,24 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net"
 	"testing"
 	"time"
 
-	"github.com/die-net/conduit/internal/dialer"
 	"github.com/txthinking/socks5"
+
+	"github.com/die-net/conduit/internal/dialer"
 )
 
 func TestSOCKS5ConnectDirect(t *testing.T) {
-	echoLn, err := net.Listen("tcp", "127.0.0.1:0")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	lc := net.ListenConfig{}
+	echoLn, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,9 +49,6 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	srv := NewSOCKS5Server(context.Background(), cfg, false)
 	go func() { _ = srv.Serve(ln) }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
 	client, err := socks5.NewClient(ln.Addr().String(), "", "", 2, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +68,7 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	if _, err := io.ReadFull(c, buf); err != nil {
 		t.Fatal(err)
 	}
-	if string(buf) != string(msg) {
+	if !bytes.Equal(buf, msg) {
 		t.Fatalf("expected %q got %q", string(msg), string(buf))
 	}
 
