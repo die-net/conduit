@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"crypto/tls"
 	"io"
 	"net"
@@ -14,18 +15,25 @@ import (
 )
 
 type HTTPProxyServer struct {
+	ctx context.Context
 	cfg Config
 	srv *http.Server
 	rp  *httputil.ReverseProxy
 }
 
-func NewHTTPProxyServer(cfg Config, idleTimeout time.Duration) *HTTPProxyServer {
-	h := &HTTPProxyServer{cfg: cfg}
+func NewHTTPProxyServer(ctx context.Context, cfg Config, idleTimeout time.Duration) *HTTPProxyServer {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	h := &HTTPProxyServer{ctx: ctx, cfg: cfg}
 	h.rp = h.newReverseProxy()
 	h.srv = &http.Server{
 		Handler:           http.HandlerFunc(h.handle),
 		ReadHeaderTimeout: cfg.NegotiationTimeout,
 		IdleTimeout:       idleTimeout,
+		BaseContext: func(net.Listener) context.Context {
+			return h.ctx
+		},
 	}
 	return h
 }
@@ -64,7 +72,12 @@ func (s *HTTPProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) 
 		target = net.JoinHostPort(target, "443")
 	}
 
-	ctx := r.Context()
+	ctx, cancel := context.WithCancel(s.ctx)
+	defer cancel()
+	go func() {
+		<-r.Context().Done()
+		cancel()
+	}()
 	serverConn, err := s.cfg.Dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
 		_, _ = io.WriteString(brw, "HTTP/1.1 502 Bad Gateway\r\n\r\n")

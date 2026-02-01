@@ -40,7 +40,7 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	}
 	defer ln.Close()
 
-	srv := NewSOCKS5Server(cfg)
+	srv := NewSOCKS5Server(context.Background(), cfg)
 	go func() { _ = srv.Serve(ln) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

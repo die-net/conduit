@@ -9,11 +9,15 @@ import (
 )
 
 type Server struct {
+	ctx    context.Context
 	Dialer dialer.Dialer
 }
 
-func NewServer(cfg proxy.Config) *Server {
-	return &Server{Dialer: cfg.Dialer}
+func NewServer(ctx context.Context, cfg proxy.Config) *Server {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return &Server{ctx: ctx, Dialer: cfg.Dialer}
 }
 
 func (s *Server) Serve(ln net.Listener) error {
@@ -28,7 +32,7 @@ func (s *Server) Serve(ln net.Listener) error {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
 
 	dst, ok := OriginalDst(conn)

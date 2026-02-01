@@ -138,7 +138,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("http listen: %v", err)
 		}
-		srv := proxy.NewHTTPProxyServer(cfg, *httpIdleTimeout)
+		srv := proxy.NewHTTPProxyServer(ctx, cfg, *httpIdleTimeout)
 		go func() {
 			<-ctx.Done()
 			_ = srv.Close()
@@ -155,7 +155,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("socks5 listen: %v", err)
 		}
-		s5 := proxy.NewSOCKS5Server(cfg)
+		s5 := proxy.NewSOCKS5Server(ctx, cfg)
 		go func() {
 			<-ctx.Done()
 			_ = ln.Close()
@@ -171,7 +171,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("tproxy listen: %v", err)
 		}
-		tsrv := tproxy.NewServer(cfg)
+		tsrv := tproxy.NewServer(ctx, cfg)
 		go func() {
 			<-ctx.Done()
 			_ = ln.Close()

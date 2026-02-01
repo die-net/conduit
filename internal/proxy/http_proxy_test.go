@@ -45,7 +45,7 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 	}
 	defer ln.Close()
 
-	srv := NewHTTPProxyServer(cfg, 1*time.Second)
+	srv := NewHTTPProxyServer(context.Background(), cfg, 1*time.Second)
 	go func() { _ = srv.Serve(ln) }()
 	defer srv.Close()
 
@@ -124,7 +124,7 @@ func BenchmarkHTTPProxyDirect(b *testing.B) {
 	}
 	defer ln.Close()
 
-	srv := NewHTTPProxyServer(cfg, 1*time.Second)
+	srv := NewHTTPProxyServer(context.Background(), cfg, 1*time.Second)
 	go func() { _ = srv.Serve(ln) }()
 	defer srv.Close()
 

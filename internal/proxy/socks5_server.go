@@ -9,11 +9,15 @@ import (
 )
 
 type SOCKS5Server struct {
+	ctx context.Context
 	cfg Config
 }
 
-func NewSOCKS5Server(cfg Config) *SOCKS5Server {
-	return &SOCKS5Server{cfg: cfg}
+func NewSOCKS5Server(ctx context.Context, cfg Config) *SOCKS5Server {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return &SOCKS5Server{ctx: ctx, cfg: cfg}
 }
 
 func (s *SOCKS5Server) Serve(ln net.Listener) error {
@@ -28,7 +32,7 @@ func (s *SOCKS5Server) Serve(ln net.Listener) error {
 
 func (s *SOCKS5Server) handleConn(conn net.Conn) {
 	defer conn.Close()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
 
 	if s.cfg.NegotiationTimeout > 0 {
