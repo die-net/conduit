@@ -9,12 +9,11 @@ import (
 )
 
 type Server struct {
-	KeepAlive net.KeepAliveConfig
-	Dialer    dialer.Dialer
+	Dialer dialer.Dialer
 }
 
 func NewServer(cfg proxy.Config) *Server {
-	return &Server{KeepAlive: cfg.KeepAlive, Dialer: cfg.Dialer}
+	return &Server{Dialer: cfg.Dialer}
 }
 
 func (s *Server) Serve(ln net.Listener) error {
@@ -29,22 +28,19 @@ func (s *Server) Serve(ln net.Listener) error {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-
-	tc, ok := conn.(*net.TCPConn)
-	if ok {
-		tc.SetKeepAliveConfig(s.KeepAlive)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	dst, ok := OriginalDst(conn)
 	if !ok {
 		return
 	}
 
-	up, err := s.Dialer.DialContext(context.Background(), "tcp", dst.String())
+	up, err := s.Dialer.DialContext(ctx, "tcp", dst.String())
 	if err != nil {
 		return
 	}
 	defer up.Close()
 
-	_ = proxy.CopyBidirectional(context.Background(), conn, up)
+	_ = proxy.CopyBidirectional(ctx, conn, up)
 }

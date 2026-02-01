@@ -28,10 +28,8 @@ func (s *SOCKS5Server) Serve(ln net.Listener) error {
 
 func (s *SOCKS5Server) handleConn(conn net.Conn) {
 	defer conn.Close()
-
-	if tc, ok := conn.(*net.TCPConn); ok {
-		tc.SetKeepAliveConfig(s.cfg.KeepAlive)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	if s.cfg.NegotiationTimeout > 0 {
 		_ = conn.SetDeadline(time.Now().Add(time.Duration(s.cfg.NegotiationTimeout)))
@@ -65,7 +63,6 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) {
 
 	dst := req.Address()
 
-	ctx := context.Background()
 	up, err := s.cfg.Dialer.DialContext(ctx, "tcp", dst)
 	if err != nil {
 		var rep *socks5.Reply
