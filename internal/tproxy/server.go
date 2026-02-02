@@ -51,7 +51,7 @@ func (s *Server) handle(conn net.Conn) error {
 
 	up, err := s.Dialer.DialContext(ctx, "tcp", dst.String())
 	if err != nil {
-		return fmt.Errorf("dial %s: %w", dst.String(), err)
+		return err
 	}
 	defer up.Close()
 

@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	NegotiationTimeout time.Duration
+	HTTPIdleTimeout    time.Duration
 
 	KeepAlive net.KeepAliveConfig
 
