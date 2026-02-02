@@ -28,7 +28,7 @@ func (f *SOCKS5ProxyDialer) DialContext(ctx context.Context, network, address st
 
 	c, err := f.direct.DialContext(ctx, network, f.proxyAddr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("socks5 proxy: %w", err)
 	}
 
 	if f.cfg.NegotiationTimeout > 0 {

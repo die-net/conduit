@@ -73,6 +73,7 @@ func run() error {
 
 	cfg := proxy.Config{
 		NegotiationTimeout: *negotiationTimeout,
+		HTTPIdleTimeout:    *httpIdleTimeout,
 		KeepAlive:          ka,
 	}
 
@@ -149,7 +150,7 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("http listen: %w", err)
 		}
-		srv := proxy.NewHTTPProxyServer(ctx, cfg, *httpIdleTimeout)
+		srv := proxy.NewHTTPProxyServer(ctx, cfg)
 		go func() {
 			<-ctx.Done()
 			_ = srv.Close()

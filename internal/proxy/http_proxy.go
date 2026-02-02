@@ -1,12 +1,13 @@
 package proxy
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ type HTTPProxyServer struct {
 	rp  *httputil.ReverseProxy
 }
 
-func NewHTTPProxyServer(ctx context.Context, cfg Config, idleTimeout time.Duration) *HTTPProxyServer {
+func NewHTTPProxyServer(ctx context.Context, cfg Config) *HTTPProxyServer {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -29,7 +30,7 @@ func NewHTTPProxyServer(ctx context.Context, cfg Config, idleTimeout time.Durati
 	h.srv = &http.Server{
 		Handler:           http.HandlerFunc(h.handle),
 		ReadHeaderTimeout: cfg.NegotiationTimeout,
-		IdleTimeout:       idleTimeout,
+		IdleTimeout:       cfg.HTTPIdleTimeout,
 		BaseContext: func(net.Listener) context.Context {
 			return h.ctx
 		},
@@ -71,15 +72,11 @@ func (s *HTTPProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) 
 		target = net.JoinHostPort(target, "443")
 	}
 
-	ctx, cancel := context.WithCancel(s.ctx)
-	defer cancel()
-	go func() {
-		<-r.Context().Done()
-		cancel()
-	}()
+	ctx := r.Context()
+
 	serverConn, err := s.cfg.Dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
-		_, _ = brw.WriteString("HTTP/1.1 502 Bad Gateway\r\n\r\n")
+		_, _ = writeError(brw, err, 502)
 		_ = brw.Flush()
 		_ = clientConn.Close()
 		return
@@ -91,6 +88,11 @@ func (s *HTTPProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) 
 	_ = CopyBidirectional(ctx, clientConn, serverConn)
 }
 
+// writeError simulates http.Error() for use on a hijacked connection.
+func writeError(brw *bufio.ReadWriter, err error, code int) (int, error) {
+	return fmt.Fprintf(brw, "HTTP/1.1 %d %s\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n\r\n%s\r\n", code, http.StatusText(code), err.Error())
+}
+
 func (s *HTTPProxyServer) newReverseProxy() *httputil.ReverseProxy {
 	director := func(r *http.Request) {
 		// Forward-proxy handling: ensure URL is absolute and points at the origin server.
@@ -98,9 +100,14 @@ func (s *HTTPProxyServer) newReverseProxy() *httputil.ReverseProxy {
 			return
 		}
 
-		if r.URL.Scheme == "" {
+		// Allow schema override through a non-standard header.
+		if s, ok := r.Header["X-Proxy-Scheme"]; ok {
+			delete(r.Header, "X-Proxy-Scheme")
+			r.URL.Scheme = s[0]
+		} else if r.URL.Scheme == "" {
 			r.URL.Scheme = "http"
 		}
+
 		if r.URL.Host == "" {
 			r.URL.Host = r.Host
 		}
@@ -110,53 +117,40 @@ func (s *HTTPProxyServer) newReverseProxy() *httputil.ReverseProxy {
 		r.Header["X-Forwarded-For"] = nil
 	}
 
-	errHandler := func(w http.ResponseWriter, _ *http.Request, _ error) {
-		w.WriteHeader(http.StatusBadGateway)
+	errHandler := func(w http.ResponseWriter, _ *http.Request, err error) {
+		http.Error(w, err.Error(), http.StatusBadGateway)
 	}
 
 	return &httputil.ReverseProxy{
 		Director:      director,
-		Transport:     newForwardingTransport(s.cfg),
+		Transport:     newTransport(s.cfg),
 		FlushInterval: 10 * time.Millisecond, // Only buffer incomplete responses briefly
 		ErrorHandler:  errHandler,
 		BufferPool:    NewBufferPool(32768),
 	}
 }
 
-type forwardingTransport struct {
-	base http.Transport
-}
-
-func newForwardingTransport(cfg Config) http.RoundTripper {
-	ft := &forwardingTransport{}
-
-	proxyFunc := func(*http.Request) (*url.URL, error) { return nil, nil }
-	dial := cfg.Dialer.DialContext
-
-	// For non-CONNECT HTTP proxying, prefer the standard library proxy support when the
-	// configured dialer is an HTTP proxy.
-	if up, ok := cfg.Dialer.(*dialer.HTTPProxyDialer); ok {
-		proxyFunc = http.ProxyURL(up.ProxyURL())
-		// When using Transport.Proxy, DialContext is used to connect to the proxy itself.
-		dial = up.Direct().DialContext
-	}
-
-	ft.base = http.Transport{
-		Proxy:               proxyFunc,
-		DialContext:         dial,
+func newTransport(cfg Config) http.RoundTripper {
+	t := &http.Transport{
+		DialContext:         cfg.Dialer.DialContext,
 		ForceAttemptHTTP2:   true,
 		MaxIdleConns:        2048,
 		MaxIdleConnsPerHost: 1024,
-		IdleConnTimeout:     90 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second,
+		IdleConnTimeout:     cfg.HTTPIdleTimeout,
+		TLSHandshakeTimeout: cfg.NegotiationTimeout,
 		TLSClientConfig: &tls.Config{
 			MinVersion:         tls.VersionTLS12,
 			ClientSessionCache: tls.NewLRUClientSessionCache(0),
 		},
 	}
-	return ft
-}
 
-func (t *forwardingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	return t.base.RoundTrip(r)
+	// For non-CONNECT HTTP proxying, prefer the standard library proxy support when the
+	// configured dialer is an HTTP proxy.
+	if up, ok := cfg.Dialer.(*dialer.HTTPProxyDialer); ok {
+		t.Proxy = http.ProxyURL(up.ProxyURL())
+		// When using Transport.Proxy, DialContext is used to connect to the proxy itself.
+		t.DialContext = up.Direct().DialContext
+	}
+
+	return t
 }

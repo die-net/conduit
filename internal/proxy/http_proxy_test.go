@@ -39,6 +39,7 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 
 	cfg := Config{
 		NegotiationTimeout: 2 * time.Second,
+		HTTPIdleTimeout:    1 * time.Second,
 		Dialer: dialer.NewDirectDialer(dialer.Config{
 			DialTimeout: 2 * time.Second,
 		}),
@@ -50,7 +51,7 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 	}
 	defer ln.Close()
 
-	srv := NewHTTPProxyServer(context.Background(), cfg, 1*time.Second)
+	srv := NewHTTPProxyServer(context.Background(), cfg)
 	go func() { _ = srv.Serve(ln) }()
 	defer srv.Close()
 
@@ -116,6 +117,7 @@ func BenchmarkHTTPProxyDirect(b *testing.B) {
 
 	cfg := Config{
 		NegotiationTimeout: 2 * time.Second,
+		HTTPIdleTimeout:    1 * time.Second,
 		Dialer: dialer.NewDirectDialer(dialer.Config{
 			DialTimeout: 2 * time.Second,
 		}),
@@ -127,7 +129,7 @@ func BenchmarkHTTPProxyDirect(b *testing.B) {
 	}
 	defer ln.Close()
 
-	srv := NewHTTPProxyServer(context.Background(), cfg, 1*time.Second)
+	srv := NewHTTPProxyServer(context.Background(), cfg)
 	go func() { _ = srv.Serve(ln) }()
 	defer srv.Close()
 

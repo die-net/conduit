@@ -59,7 +59,7 @@ func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 
 	c, err := f.direct.DialContext(ctx, network, f.proxyURL.Host)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("http proxy: %w", err)
 	}
 
 	if strings.EqualFold(f.proxyURL.Scheme, "https") {

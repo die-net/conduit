@@ -2,7 +2,6 @@ package dialer
 
 import (
 	"context"
-	"fmt"
 	"net"
 )
 
@@ -19,7 +18,7 @@ func (f *directDialer) DialContext(ctx context.Context, network, address string)
 
 	conn, err := dd.DialContext(ctx, network, address)
 	if err != nil {
-		return nil, fmt.Errorf("dial %s %s: %w", network, address, err)
+		return nil, err
 	}
 
 	if tc, ok := conn.(*net.TCPConn); ok {

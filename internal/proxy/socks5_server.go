@@ -85,7 +85,7 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) error {
 			rep = socks5.NewReply(socks5.RepConnectionRefused, socks5.ATYPIPv4, []byte{0x00, 0x00, 0x00, 0x00}, []byte{0x00, 0x00})
 		}
 		_, _ = rep.WriteTo(conn)
-		return fmt.Errorf("dial %s: %w", dst, err)
+		return err
 	}
 	defer up.Close()
 
