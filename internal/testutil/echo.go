@@ -1,11 +1,11 @@
 package testutil
 
 import (
-        "bytes"
-        "context"
-        "io"
-        "net"
-        "testing"
+	"bytes"
+	"context"
+	"io"
+	"net"
+	"testing"
 )
 
 func StartEchoTCPServer(t *testing.T, ctx context.Context) net.Listener {

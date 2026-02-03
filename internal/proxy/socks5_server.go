@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/txthinking/socks5"
+	"github.com/die-net/conduit/internal/socks5"
 )
 
 type SOCKS5Server struct {
@@ -48,29 +48,16 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) error {
 		_ = conn.SetDeadline(time.Now().Add(s.cfg.NegotiationTimeout))
 	}
 
-	// negotiation (no-auth only)
-	neg, err := socks5.NewNegotiationRequestFrom(conn)
-	if err != nil {
-		return fmt.Errorf("negotiation request: %w", err)
-	}
-	_ = neg
-	if _, err := socks5.NewNegotiationReply(socks5.MethodNone).WriteTo(conn); err != nil {
-		return fmt.Errorf("negotiation reply: %w", err)
+	if err := socks5.ServerNegotiateNoAuth(conn); err != nil {
+		return err
 	}
 
-	// request
-	req, err := socks5.NewRequestFrom(conn)
+	req, err := socks5.ServerReadRequest(conn)
 	if err != nil {
-		return fmt.Errorf("request: %w", err)
+		return err
 	}
 	if req.Cmd != socks5.CmdConnect {
-		var rep *socks5.Reply
-		if req.Atyp == socks5.ATYPIPv6 {
-			rep = socks5.NewReply(socks5.RepCommandNotSupported, socks5.ATYPIPv6, []byte(net.IPv6zero), []byte{0x00, 0x00})
-		} else {
-			rep = socks5.NewReply(socks5.RepCommandNotSupported, socks5.ATYPIPv4, []byte{0x00, 0x00, 0x00, 0x00}, []byte{0x00, 0x00})
-		}
-		_, _ = rep.WriteTo(conn)
+		socks5.WriteCommandNotSupportedReply(conn, req.Atyp)
 		return fmt.Errorf("unsupported command: %d", req.Cmd)
 	}
 
@@ -78,26 +65,13 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) error {
 
 	up, err := s.cfg.Dialer.DialContext(ctx, "tcp", dst)
 	if err != nil {
-		var rep *socks5.Reply
-		if req.Atyp == socks5.ATYPIPv6 {
-			rep = socks5.NewReply(socks5.RepConnectionRefused, socks5.ATYPIPv6, []byte(net.IPv6zero), []byte{0x00, 0x00})
-		} else {
-			rep = socks5.NewReply(socks5.RepConnectionRefused, socks5.ATYPIPv4, []byte{0x00, 0x00, 0x00, 0x00}, []byte{0x00, 0x00})
-		}
-		_, _ = rep.WriteTo(conn)
+		socks5.WriteConnectionRefusedReply(conn, req.Atyp)
 		return err
 	}
 	defer up.Close()
 
-	a, addr, port, err := socks5.ParseAddress(up.LocalAddr().String())
-	if err != nil {
-		return fmt.Errorf("parse local address %q: %w", up.LocalAddr().String(), err)
-	}
-	if a == socks5.ATYPDomain {
-		addr = addr[1:]
-	}
-	if _, err := socks5.NewReply(socks5.RepSuccess, a, addr, port).WriteTo(conn); err != nil {
-		return fmt.Errorf("success reply: %w", err)
+	if err := socks5.WriteSuccessReply(conn, up.LocalAddr()); err != nil {
+		return err
 	}
 
 	if s.cfg.NegotiationTimeout > 0 {

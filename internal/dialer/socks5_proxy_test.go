@@ -7,8 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/txthinking/socks5"
-
+	"github.com/die-net/conduit/internal/socks5"
 	"github.com/die-net/conduit/internal/testutil"
 )
 
@@ -31,7 +30,39 @@ func TestSOCKS5ProxyDialerDialSuccess(t *testing.T) {
 			defer echoLn.Close()
 
 			upLn, waitUp := testutil.StartSingleAcceptServer(t, ctx, func(c net.Conn) {
-				_ = handleSOCKS5Connect(ctx, c, tt.user, tt.pass)
+				var auth socks5.Auth
+				if tt.user != "" {
+					auth = socks5.Auth{Username: tt.user, Password: tt.pass}
+				}
+				if err := socks5.ServerNegotiate(c, auth); err != nil {
+					return
+				}
+				req, err := socks5.ServerReadRequest(c)
+				if err != nil {
+					return
+				}
+				if req.Cmd != 0x01 {
+					socks5.WriteCommandNotSupportedReply(c, req.Atyp)
+					return
+				}
+
+				d := net.Dialer{}
+				dst, err := d.DialContext(ctx, "tcp", req.Address())
+				if err != nil {
+					socks5.WriteConnectionRefusedReply(c, req.Atyp)
+					return
+				}
+				defer dst.Close()
+
+				if err := socks5.WriteSuccessReply(c, dst.LocalAddr()); err != nil {
+					return
+				}
+
+				go func() {
+					_, _ = io.Copy(dst, c)
+					_ = dst.Close()
+				}()
+				_, _ = io.Copy(c, dst)
 			})
 
 			f := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), tt.user, tt.pass)
@@ -88,20 +119,14 @@ func TestSOCKS5ProxyDialerDialFail(t *testing.T) {
 	defer cancel()
 
 	upLn, waitUp := testutil.StartSingleAcceptServer(t, ctx, func(c net.Conn) {
-		if _, err := socks5.NewNegotiationRequestFrom(c); err != nil {
+		if err := socks5.ServerNegotiateNoAuth(c); err != nil {
 			return
 		}
-		if _, err := socks5.NewNegotiationReply(socks5.MethodNone).WriteTo(c); err != nil {
-			return
-		}
-		req, err := socks5.NewRequestFrom(c)
+		req, err := socks5.ServerReadRequest(c)
 		if err != nil {
 			return
 		}
-		if req.Cmd != socks5.CmdConnect {
-			return
-		}
-		_, _ = socks5.NewReply(socks5.RepConnectionRefused, socks5.ATYPIPv4, []byte{0x00, 0x00, 0x00, 0x00}, []byte{0x00, 0x00}).WriteTo(c)
+		socks5.WriteConnectionRefusedReply(c, req.Atyp)
 	})
 
 	f := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), "", "")
@@ -112,68 +137,4 @@ func TestSOCKS5ProxyDialerDialFail(t *testing.T) {
 	}
 
 	waitUp()
-}
-
-func handleSOCKS5Connect(ctx context.Context, c net.Conn, user, pass string) error {
-	if _, err := socks5.NewNegotiationRequestFrom(c); err != nil {
-		return err
-	}
-
-	if user == "" && pass == "" {
-		if _, err := socks5.NewNegotiationReply(socks5.MethodNone).WriteTo(c); err != nil {
-			return err
-		}
-	} else {
-		if _, err := socks5.NewNegotiationReply(socks5.MethodUsernamePassword).WriteTo(c); err != nil {
-			return err
-		}
-
-		urq, err := socks5.NewUserPassNegotiationRequestFrom(c)
-		if err != nil {
-			return err
-		}
-		if string(urq.Uname) != user || string(urq.Passwd) != pass {
-			_, _ = socks5.NewUserPassNegotiationReply(socks5.UserPassStatusFailure).WriteTo(c)
-			return nil
-		}
-		if _, err := socks5.NewUserPassNegotiationReply(socks5.UserPassStatusSuccess).WriteTo(c); err != nil {
-			return err
-		}
-	}
-
-	req, err := socks5.NewRequestFrom(c)
-	if err != nil {
-		return err
-	}
-	if req.Cmd != socks5.CmdConnect {
-		_, _ = socks5.NewReply(socks5.RepCommandNotSupported, socks5.ATYPIPv4, []byte{0x00, 0x00, 0x00, 0x00}, []byte{0x00, 0x00}).WriteTo(c)
-		return nil
-	}
-
-	d := net.Dialer{}
-	dst, err := d.DialContext(ctx, "tcp", req.Address())
-	if err != nil {
-		_, _ = socks5.NewReply(socks5.RepHostUnreachable, socks5.ATYPIPv4, []byte{0x00, 0x00, 0x00, 0x00}, []byte{0x00, 0x00}).WriteTo(c)
-		return nil
-	}
-	defer dst.Close()
-
-	a, addr, port, err := socks5.ParseAddress(dst.LocalAddr().String())
-	if err != nil {
-		return err
-	}
-	if a == socks5.ATYPDomain {
-		addr = addr[1:]
-	}
-	if _, err := socks5.NewReply(socks5.RepSuccess, a, addr, port).WriteTo(c); err != nil {
-		return err
-	}
-
-	go func() {
-		_, _ = io.Copy(dst, c)
-		_ = dst.Close()
-	}()
-	_, _ = io.Copy(c, dst)
-
-	return nil
 }

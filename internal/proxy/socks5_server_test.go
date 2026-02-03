@@ -6,9 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/txthinking/socks5"
-
 	"github.com/die-net/conduit/internal/dialer"
+	"github.com/die-net/conduit/internal/socks5"
 	"github.com/die-net/conduit/internal/testutil"
 )
 
@@ -34,16 +33,19 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	srv := NewSOCKS5Server(context.Background(), cfg, false)
 	go func() { _ = srv.Serve(ln) }()
 
-	client, err := socks5.NewClient(ln.Addr().String(), "", "", 2, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	c, err := client.Dial("tcp", echoLn.Addr().String())
+	d := net.Dialer{}
+	c, err := d.DialContext(ctx, "tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.Close()
+
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = c.SetDeadline(deadline)
+	}
+	if err := socks5.ClientDial(c, socks5.Auth{}, echoLn.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
 
 	testutil.AssertEcho(t, c, c, []byte("hello"))
 

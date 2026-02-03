@@ -1,10 +1,10 @@
 package testutil
 
 import (
-        "context"
-        "net"
-        "sync"
-        "testing"
+	"context"
+	"net"
+	"sync"
+	"testing"
 )
 
 func StartSingleAcceptServer(t *testing.T, ctx context.Context, handler func(net.Conn)) (net.Listener, func()) {
