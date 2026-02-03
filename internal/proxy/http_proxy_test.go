@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"io"
 	"net"
@@ -13,29 +12,15 @@ import (
 	"time"
 
 	"github.com/die-net/conduit/internal/dialer"
+	"github.com/die-net/conduit/internal/testutil"
 )
 
 func TestHTTPProxyConnectDirect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	// simple echo server
-	lc := net.ListenConfig{}
-	echoLn, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	echoLn := testutil.StartEchoTCPServer(t, ctx)
 	defer echoLn.Close()
-	go func() {
-		c, _ := echoLn.Accept()
-		if c == nil {
-			return
-		}
-		defer c.Close()
-		buf := make([]byte, 1024)
-		n, _ := c.Read(buf)
-		_, _ = c.Write(buf[:n])
-	}()
 
 	cfg := Config{
 		NegotiationTimeout: 2 * time.Second,
@@ -81,17 +66,7 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 
 	_ = resp.Body.Close()
 
-	msg := []byte("hello")
-	if _, err := c.Write(msg); err != nil {
-		t.Fatal(err)
-	}
-	buf := make([]byte, len(msg))
-	if _, err := br.Read(buf); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(buf, msg) {
-		t.Fatalf("expected %q got %q", string(msg), string(buf))
-	}
+	testutil.AssertEcho(t, c, br, []byte("hello"))
 
 	select {
 	case <-ctx.Done():
