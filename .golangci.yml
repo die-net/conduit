@@ -43,6 +43,7 @@ linters:
       disabled-checks:
         - ifElseChain
         - octalLiteral
+        - unnamedResult
         - whyNoLint
     godox:
       keywords:

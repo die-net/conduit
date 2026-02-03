@@ -18,7 +18,7 @@ It can forward outbound connections:
 
 Requirements:
 
-- Go 1.22+ (the module targets Go 1.22)
+- Go 1.25+ (the module targets Go 1.25)
 
 Build a local binary:
 
@@ -119,7 +119,7 @@ TCP keepalive is optionally applied to all accepted TCP connections and all outb
   - IPv4/IPv6/domain targets
 - **Upstream SOCKS5 forwarding** uses `github.com/txthinking/socks5`.
   - Outbound proxy connections are dialed with the internal dialer interface (`DialContext`).
-  - SOCKS5 negotiation and CONNECT are performed using the library's low-level protocol API.
+  - SOCKS5 negotiation and CONNECT are performed via shared helpers in `internal/socks5` (built on the library's low-level protocol API).
 - After connections are negotiated, we try to preserve the Linux zero-copy fast path.
 
 ## Linux transparent proxy (TPROXY)

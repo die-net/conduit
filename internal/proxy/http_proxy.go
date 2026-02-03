@@ -15,18 +15,17 @@ import (
 )
 
 type HTTPProxyServer struct {
-	ctx context.Context
-	cfg Config
-	srv *http.Server
-	rp  *httputil.ReverseProxy
+	ctx    context.Context
+	dialer dialer.Dialer
+	srv    *http.Server
+	rp     *httputil.ReverseProxy
 }
 
 func NewHTTPProxyServer(ctx context.Context, cfg Config) *HTTPProxyServer {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	h := &HTTPProxyServer{ctx: ctx, cfg: cfg}
-	h.rp = h.newReverseProxy()
+	h := &HTTPProxyServer{ctx: ctx, dialer: cfg.Dialer, rp: newReverseProxy(cfg)}
 	h.srv = &http.Server{
 		Handler:           http.HandlerFunc(h.handle),
 		ReadHeaderTimeout: cfg.NegotiationTimeout,
@@ -74,7 +73,7 @@ func (s *HTTPProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	serverConn, err := s.cfg.Dialer.DialContext(ctx, "tcp", target)
+	serverConn, err := s.dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
 		_, _ = writeError(brw, err, 502)
 		_ = brw.Flush()
@@ -93,7 +92,7 @@ func writeError(brw *bufio.ReadWriter, err error, code int) (int, error) {
 	return fmt.Fprintf(brw, "HTTP/1.1 %d %s\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n\r\n%s\r\n", code, http.StatusText(code), err.Error())
 }
 
-func (s *HTTPProxyServer) newReverseProxy() *httputil.ReverseProxy {
+func newReverseProxy(cfg Config) *httputil.ReverseProxy {
 	director := func(r *http.Request) {
 		// Forward-proxy handling: ensure URL is absolute and points at the origin server.
 		if r.URL == nil {
@@ -123,7 +122,7 @@ func (s *HTTPProxyServer) newReverseProxy() *httputil.ReverseProxy {
 
 	return &httputil.ReverseProxy{
 		Director:      director,
-		Transport:     newTransport(s.cfg),
+		Transport:     newTransport(cfg),
 		FlushInterval: 10 * time.Millisecond, // Only buffer incomplete responses briefly
 		ErrorHandler:  errHandler,
 		BufferPool:    NewBufferPool(32768),

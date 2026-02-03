@@ -1,38 +1,22 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
-	"io"
 	"net"
 	"testing"
 	"time"
 
-	"github.com/txthinking/socks5"
-
 	"github.com/die-net/conduit/internal/dialer"
+	"github.com/die-net/conduit/internal/socks5"
+	"github.com/die-net/conduit/internal/testutil"
 )
 
 func TestSOCKS5ConnectDirect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	lc := net.ListenConfig{}
-	echoLn, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	echoLn := testutil.StartEchoTCPServer(t, ctx)
 	defer echoLn.Close()
-	go func() {
-		c, _ := echoLn.Accept()
-		if c == nil {
-			return
-		}
-		defer c.Close()
-		buf := make([]byte, 1024)
-		n, _ := c.Read(buf)
-		_, _ = c.Write(buf[:n])
-	}()
 
 	cfg := Config{
 		Dialer: dialer.NewDirectDialer(dialer.Config{
@@ -49,28 +33,21 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	srv := NewSOCKS5Server(context.Background(), cfg, false)
 	go func() { _ = srv.Serve(ln) }()
 
-	client, err := socks5.NewClient(ln.Addr().String(), "", "", 2, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	c, err := client.Dial("tcp", echoLn.Addr().String())
+	d := net.Dialer{}
+	c, err := d.DialContext(ctx, "tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.Close()
 
-	msg := []byte("hello")
-	if _, err := c.Write(msg); err != nil {
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = c.SetDeadline(deadline)
+	}
+	if err := socks5.ClientDial(c, socks5.Auth{}, echoLn.Addr().String()); err != nil {
 		t.Fatal(err)
 	}
-	buf := make([]byte, len(msg))
-	if _, err := io.ReadFull(c, buf); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(buf, msg) {
-		t.Fatalf("expected %q got %q", string(msg), string(buf))
-	}
+
+	testutil.AssertEcho(t, c, c, []byte("hello"))
 
 	select {
 	case <-ctx.Done():

@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
-	"github.com/txthinking/socks5"
+	"github.com/die-net/conduit/internal/socks5"
 )
 
 type SOCKS5ProxyDialer struct {
@@ -22,7 +23,7 @@ func NewSOCKS5ProxyDialer(cfg Config, proxyAddr, username, password string) Dial
 }
 
 func (f *SOCKS5ProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	if network != "tcp" {
+	if !strings.HasPrefix(network, "tcp") {
 		return nil, fmt.Errorf("socks5 proxy dial %s %s: unsupported network", network, address)
 	}
 
@@ -49,63 +50,13 @@ func (f *SOCKS5ProxyDialer) DialContext(ctx context.Context, network, address st
 		_ = c.SetDeadline(deadline)
 	}
 
-	methods := []byte{socks5.MethodNone}
+	var auth socks5.Auth
 	if f.username != "" {
-		methods = append(methods, socks5.MethodUsernamePassword)
+		auth = socks5.Auth{Username: f.username, Password: f.password}
 	}
-	if _, err := socks5.NewNegotiationRequest(methods).WriteTo(c); err != nil {
+	if err := socks5.ClientDial(c, auth, address); err != nil {
 		_ = c.Close()
-		return nil, fmt.Errorf("socks5 proxy connect write negotiation: %w", err)
-	}
-	neg, err := socks5.NewNegotiationReplyFrom(c)
-	if err != nil {
-		_ = c.Close()
-		return nil, fmt.Errorf("socks5 proxy connect read negotiation: %w", err)
-	}
-	if neg.Method == socks5.MethodUsernamePassword {
-		if f.username == "" {
-			_ = c.Close()
-			return nil, fmt.Errorf("socks5 proxy connect negotiation failed")
-		}
-		if _, err := socks5.NewUserPassNegotiationRequest([]byte(f.username), []byte(f.password)).WriteTo(c); err != nil {
-			_ = c.Close()
-			return nil, fmt.Errorf("socks5 proxy connect write userpass: %w", err)
-		}
-		rep, err := socks5.NewUserPassNegotiationReplyFrom(c)
-		if err != nil {
-			_ = c.Close()
-			return nil, fmt.Errorf("socks5 proxy connect read userpass: %w", err)
-		}
-		if rep.Status != socks5.UserPassStatusSuccess {
-			_ = c.Close()
-			return nil, fmt.Errorf("socks5 proxy connect auth failed")
-		}
-	} else if neg.Method != socks5.MethodNone {
-		_ = c.Close()
-		return nil, fmt.Errorf("socks5 proxy connect negotiation failed")
-	}
-
-	atyp, dstAddr, dstPort, err := socks5.ParseAddress(address)
-	if err != nil {
-		_ = c.Close()
-		return nil, fmt.Errorf("socks5 proxy connect parse address: %w", err)
-	}
-	if atyp == socks5.ATYPDomain {
-		dstAddr = dstAddr[1:]
-	}
-
-	if _, err := socks5.NewRequest(socks5.CmdConnect, atyp, dstAddr, dstPort).WriteTo(c); err != nil {
-		_ = c.Close()
-		return nil, fmt.Errorf("socks5 proxy connect write request: %w", err)
-	}
-	rep, err := socks5.NewReplyFrom(c)
-	if err != nil {
-		_ = c.Close()
-		return nil, fmt.Errorf("socks5 proxy connect read reply: %w", err)
-	}
-	if rep.Rep != socks5.RepSuccess {
-		_ = c.Close()
-		return nil, fmt.Errorf("socks5 proxy connect failed")
+		return nil, fmt.Errorf("socks5 proxy connect: %w", err)
 	}
 
 	if f.cfg.NegotiationTimeout > 0 {

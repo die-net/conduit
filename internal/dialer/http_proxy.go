@@ -53,7 +53,7 @@ func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 	if f.proxyURL == nil {
 		return nil, fmt.Errorf("http proxy connect: missing proxy url")
 	}
-	if network != "tcp" {
+	if !strings.HasPrefix(network, "tcp") {
 		return nil, fmt.Errorf("http proxy dial %s %s: unsupported network", network, address)
 	}
 
