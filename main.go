@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/die-net/conduit/internal/dialer"
 	"github.com/die-net/conduit/internal/proxy"
@@ -120,10 +121,10 @@ func run() error {
 		return fmt.Errorf("unreachable upstream scheme")
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	g, ctx := errgroup.WithContext(context.Background())
 
-	errCh := make(chan error, 4)
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	if *debugListen != "" {
 		debugSrv := &http.Server{Handler: http.DefaultServeMux} //nolint:gosec // Not concerned about timeouts on debug port.
@@ -132,16 +133,17 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("debug listen: %w", err)
 		}
-		go func() {
-			<-ctx.Done()
+		context.AfterFunc(ctx, func() {
 			_ = debugSrv.Close()
 			_ = debugLn.Close()
-		}()
-		go func() {
+		})
+
+		g.Go(func() error {
 			if err := debugSrv.Serve(debugLn); err != nil {
-				errCh <- fmt.Errorf("debug serve: %w", err)
+				return fmt.Errorf("debug serve: %w", err)
 			}
-		}()
+			return nil
+		})
 		log.Printf("debug listening on %s", *debugListen)
 	}
 
@@ -151,16 +153,17 @@ func run() error {
 			return fmt.Errorf("http listen: %w", err)
 		}
 		srv := proxy.NewHTTPProxyServer(ctx, cfg)
-		go func() {
-			<-ctx.Done()
+		context.AfterFunc(ctx, func() {
 			_ = srv.Close()
 			_ = ln.Close()
-		}()
-		go func() {
+		})
+
+		g.Go(func() error {
 			if err := srv.Serve(ln); err != nil {
-				errCh <- fmt.Errorf("http proxy serve: %w", err)
+				return fmt.Errorf("http proxy serve: %w", err)
 			}
-		}()
+			return nil
+		})
 		log.Printf("http proxy listening on %s", *httpListen)
 	}
 
@@ -170,15 +173,17 @@ func run() error {
 			return fmt.Errorf("socks5 listen: %w", err)
 		}
 		s5 := proxy.NewSOCKS5Server(ctx, cfg, *verbose)
-		go func() {
-			<-ctx.Done()
+		context.AfterFunc(ctx, func() {
 			_ = ln.Close()
-		}()
-		go func() {
+		})
+
+		g.Go(func() error {
 			if err := s5.Serve(ln); err != nil {
-				errCh <- fmt.Errorf("socks5 serve: %w", err)
+				return fmt.Errorf("socks5 serve: %w", err)
 			}
-		}()
+			return nil
+		})
+
 		log.Printf("socks5 proxy listening on %s", *socksListen)
 	}
 
@@ -188,41 +193,26 @@ func run() error {
 			return fmt.Errorf("tproxy listen: %w", err)
 		}
 		tsrv := tproxy.NewServer(ctx, cfg, *verbose)
-		go func() {
-			<-ctx.Done()
+		context.AfterFunc(ctx, func() {
 			_ = ln.Close()
-		}()
-		go func() {
+		})
+
+		g.Go(func() error {
 			if err := tsrv.Serve(ln); err != nil {
-				errCh <- fmt.Errorf("tproxy serve: %w", err)
+				return fmt.Errorf("tproxy serve: %w", err)
 			}
-		}()
+			return nil
+		})
 		log.Printf("tproxy listening on %s", *tproxyListen)
 	}
 
-	select {
-	case <-ctx.Done():
-		log.Printf("shutting down")
-	case err := <-errCh:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("server error: %w", err)
-		}
+	err = g.Wait()
+	if errors.Is(err, http.ErrServerClosed) {
+		err = nil
 	}
 
-	for {
-		select {
-		case err := <-errCh:
-			if err == nil {
-				continue
-			}
-			if errors.Is(err, net.ErrClosed) || errors.Is(err, http.ErrServerClosed) {
-				continue
-			}
-			return fmt.Errorf("server error: %w", err)
-		default:
-			return nil
-		}
-	}
+	log.Printf("shutting down")
+	return err
 }
 
 func parseTCPKeepAlive(s string) (net.KeepAliveConfig, error) {
