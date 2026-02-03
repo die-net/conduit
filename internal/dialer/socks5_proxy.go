@@ -36,15 +36,10 @@ func (f *SOCKS5ProxyDialer) DialContext(ctx context.Context, network, address st
 		_ = c.SetDeadline(time.Now().Add(f.cfg.NegotiationTimeout))
 	}
 
-	ctxDone := make(chan struct{})
-	defer close(ctxDone)
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = c.Close()
-		case <-ctxDone:
-		}
-	}()
+	stop := context.AfterFunc(ctx, func() {
+		_ = c.Close()
+	})
+	defer stop()
 
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = c.SetDeadline(deadline)

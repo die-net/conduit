@@ -48,10 +48,4 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	}
 
 	testutil.AssertEcho(t, c, c, []byte("hello"))
-
-	select {
-	case <-ctx.Done():
-		// ok
-	default:
-	}
 }

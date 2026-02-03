@@ -67,12 +67,6 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 	_ = resp.Body.Close()
 
 	testutil.AssertEcho(t, c, br, []byte("hello"))
-
-	select {
-	case <-ctx.Done():
-		// ok
-	default:
-	}
 }
 
 func BenchmarkHTTPProxyDirect(b *testing.B) {
