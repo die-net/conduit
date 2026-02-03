@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/txthinking/socks5"
@@ -22,7 +23,7 @@ func NewSOCKS5ProxyDialer(cfg Config, proxyAddr, username, password string) Dial
 }
 
 func (f *SOCKS5ProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	if network != "tcp" {
+	if !strings.HasPrefix(network, "tcp") {
 		return nil, fmt.Errorf("socks5 proxy dial %s %s: unsupported network", network, address)
 	}
 
