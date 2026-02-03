@@ -45,9 +45,7 @@ func TestSOCKS5ProxyDialerDialSuccess(t *testing.T) {
 	defer upLn.Close()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		c, err := upLn.Accept()
 		if err != nil {
 			return
@@ -91,7 +89,7 @@ func TestSOCKS5ProxyDialerDialSuccess(t *testing.T) {
 			_ = dst.Close()
 		}()
 		_, _ = io.Copy(c, dst)
-	}()
+	})
 
 	f := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), "", "")
 
@@ -149,9 +147,7 @@ func TestSOCKS5ProxyDialerDialAuthSuccess(t *testing.T) {
 	defer upLn.Close()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		c, err := upLn.Accept()
 		if err != nil {
 			return
@@ -209,7 +205,7 @@ func TestSOCKS5ProxyDialerDialAuthSuccess(t *testing.T) {
 			_ = dst.Close()
 		}()
 		_, _ = io.Copy(c, dst)
-	}()
+	})
 
 	f := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), "user", "pass")
 
@@ -281,9 +277,7 @@ func TestSOCKS5ProxyDialerDialFail(t *testing.T) {
 	defer upLn.Close()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		c, err := upLn.Accept()
 		if err != nil {
 			return
@@ -304,7 +298,7 @@ func TestSOCKS5ProxyDialerDialFail(t *testing.T) {
 			return
 		}
 		_, _ = socks5.NewReply(socks5.RepConnectionRefused, socks5.ATYPIPv4, []byte{0x00, 0x00, 0x00, 0x00}, []byte{0x00, 0x00}).WriteTo(c)
-	}()
+	})
 
 	f := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), "", "")
 

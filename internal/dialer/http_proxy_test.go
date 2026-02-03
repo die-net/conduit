@@ -47,9 +47,7 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 	defer upLn.Close()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		c, err := upLn.Accept()
 		if err != nil {
 			return
@@ -82,7 +80,7 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 			_ = dst.Close()
 		}()
 		_, _ = io.Copy(c, dst)
-	}()
+	})
 
 	proxyURL, err := url.Parse("http://" + upLn.Addr().String())
 	if err != nil {
@@ -126,9 +124,7 @@ func TestHTTPProxyDialerDialAuthHeader(t *testing.T) {
 	gotAuth := make(chan string, 1)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		c, err := upLn.Accept()
 		if err != nil {
 			return
@@ -143,7 +139,7 @@ func TestHTTPProxyDialerDialAuthHeader(t *testing.T) {
 		_ = req.Body.Close()
 		gotAuth <- req.Header.Get("Proxy-Authorization")
 		_, _ = io.WriteString(c, "HTTP/1.1 200 Connection Established\r\n\r\n")
-	}()
+	})
 
 	proxyURL, err := url.Parse("http://user:pass@" + upLn.Addr().String())
 	if err != nil {
@@ -183,9 +179,7 @@ func TestHTTPProxyDialerDialNon2xx(t *testing.T) {
 	defer upLn.Close()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		c, err := upLn.Accept()
 		if err != nil {
 			return
@@ -200,7 +194,7 @@ func TestHTTPProxyDialerDialNon2xx(t *testing.T) {
 		_ = req.Body.Close()
 
 		_, _ = io.WriteString(c, "HTTP/1.1 403 Forbidden\r\n\r\n")
-	}()
+	})
 
 	proxyURL, err := url.Parse("http://" + upLn.Addr().String())
 	if err != nil {
