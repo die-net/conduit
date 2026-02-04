@@ -26,10 +26,10 @@ func TestSOCKS5ProxyDialerDialSuccess(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			echoLn := testutil.StartEchoTCPServer(ctx, t)
-			defer echoLn.Close()
+			echoLn, echoStop := testutil.StartEchoTCPServer(ctx, t)
+			defer echoStop()
 
-			upLn, waitUp := testutil.StartSingleAcceptServer(ctx, t, func(c net.Conn) {
+			upLn, waitUp := testutil.StartAcceptServer(ctx, t, func(c net.Conn) {
 				var auth socks5.Auth
 				if tt.user != "" {
 					auth = socks5.Auth{Username: tt.user, Password: tt.pass}
@@ -118,7 +118,7 @@ func TestSOCKS5ProxyDialerDialFail(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	upLn, waitUp := testutil.StartSingleAcceptServer(ctx, t, func(c net.Conn) {
+	upLn, waitUp := testutil.StartAcceptServer(ctx, t, func(c net.Conn) {
 		if err := socks5.ServerNegotiateNoAuth(c); err != nil {
 			return
 		}

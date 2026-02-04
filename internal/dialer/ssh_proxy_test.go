@@ -21,24 +21,22 @@ func TestSSHProxyDialer_DialContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	echoLn1 := testutil.StartEchoTCPServer(ctx, t)
-	defer echoLn1.Close()
-	echoLn2 := testutil.StartEchoTCPServer(ctx, t)
-	defer echoLn2.Close()
+	echoLn, echoStop := testutil.StartEchoTCPServer(ctx, t)
+	defer echoStop()
 
 	sshLn := startSSHDynamicForwardServer(ctx, t, "user", "pass")
 	defer sshLn.Close()
 
 	d := NewSSHProxyDialer(Config{DialTimeout: 2 * time.Second, NegotiationTimeout: 2 * time.Second}, sshLn.Addr().String(), "user", "pass")
 
-	c1, err := d.DialContext(ctx, "tcp", echoLn1.Addr().String())
+	c1, err := d.DialContext(ctx, "tcp", echoLn.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	testutil.AssertEcho(t, c1, c1, []byte("hello"))
 	_ = c1.Close()
 
-	c2, err := d.DialContext(ctx, "tcp", echoLn2.Addr().String())
+	c2, err := d.DialContext(ctx, "tcp", echoLn.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}

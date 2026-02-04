@@ -15,8 +15,8 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	echoLn := testutil.StartEchoTCPServer(ctx, t)
-	defer echoLn.Close()
+	echoLn, echoStop := testutil.StartEchoTCPServer(ctx, t)
+	defer echoStop()
 
 	cfg := Config{
 		Dialer: dialer.NewDirectDialer(dialer.Config{

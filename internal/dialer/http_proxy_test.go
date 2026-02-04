@@ -18,10 +18,10 @@ func TestHTTPProxyDialerDialSuccess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	echoLn := testutil.StartEchoTCPServer(ctx, t)
-	defer echoLn.Close()
+	echoLn, echoStop := testutil.StartEchoTCPServer(ctx, t)
+	defer echoStop()
 
-	upLn, waitUp := testutil.StartSingleAcceptServer(ctx, t, func(c net.Conn) {
+	upLn, waitUp := testutil.StartAcceptServer(ctx, t, func(c net.Conn) {
 		br := bufio.NewReader(c)
 		req, err := http.ReadRequest(br)
 		if err != nil {
@@ -73,7 +73,7 @@ func TestHTTPProxyDialerDialAuthHeader(t *testing.T) {
 
 	gotAuth := make(chan string, 1)
 
-	upLn, waitUp := testutil.StartSingleAcceptServer(ctx, t, func(c net.Conn) {
+	upLn, waitUp := testutil.StartAcceptServer(ctx, t, func(c net.Conn) {
 		br := bufio.NewReader(c)
 		req, err := http.ReadRequest(br)
 		if err != nil {
@@ -113,7 +113,7 @@ func TestHTTPProxyDialerDialNon2xx(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	upLn, waitUp := testutil.StartSingleAcceptServer(ctx, t, func(c net.Conn) {
+	upLn, waitUp := testutil.StartAcceptServer(ctx, t, func(c net.Conn) {
 		br := bufio.NewReader(c)
 		req, err := http.ReadRequest(br)
 		if err != nil {
