@@ -82,7 +82,6 @@ func TestNew(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			d, err := New(Config{}, tt.upstream)
 			if (err != nil) != tt.wantErr {
@@ -92,7 +91,7 @@ func TestNew(t *testing.T) {
 				return
 			}
 			if d == nil {
-				t.Fatalf("got nil dialer")
+				t.Fatal("got nil dialer")
 			}
 			if tt.wantType != nil {
 				gotType := reflect.TypeOf(d)
