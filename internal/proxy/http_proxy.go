@@ -14,6 +14,11 @@ import (
 	"github.com/die-net/conduit/internal/dialer"
 )
 
+// HTTPProxyServer serves an HTTP forward proxy.
+//
+// It supports:
+// - HTTP CONNECT tunneling (via connection hijacking + bidirectional copy)
+// - non-CONNECT proxying (via httputil.ReverseProxy)
 type HTTPProxyServer struct {
 	ctx    context.Context
 	dialer dialer.Dialer
@@ -21,6 +26,10 @@ type HTTPProxyServer struct {
 	rp     *httputil.ReverseProxy
 }
 
+// NewHTTPProxyServer constructs an HTTP proxy server with the given config.
+//
+// Serve starts accepting connections on a listener; Close stops the underlying
+// http.Server.
 func NewHTTPProxyServer(ctx context.Context, cfg Config) *HTTPProxyServer {
 	if ctx == nil {
 		ctx = context.Background()
@@ -37,10 +46,12 @@ func NewHTTPProxyServer(ctx context.Context, cfg Config) *HTTPProxyServer {
 	return h
 }
 
+// Serve serves HTTP proxy requests on ln.
 func (s *HTTPProxyServer) Serve(ln net.Listener) error {
 	return s.srv.Serve(ln)
 }
 
+// Close stops the HTTP server.
 func (s *HTTPProxyServer) Close() error {
 	return s.srv.Close()
 }

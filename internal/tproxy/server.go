@@ -2,6 +2,7 @@ package tproxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -10,12 +11,17 @@ import (
 	"github.com/die-net/conduit/internal/proxy"
 )
 
+// Server is a transparent proxy (TPROXY-style) connection forwarder.
+//
+// It accepts redirected TCP connections and forwards each connection to its
+// original destination (as reported by OriginalDst).
 type Server struct {
 	ctx     context.Context
 	Dialer  dialer.Dialer
 	Verbose bool
 }
 
+// NewServer constructs a transparent proxy Server.
 func NewServer(ctx context.Context, cfg proxy.Config, verbose bool) *Server {
 	if ctx == nil {
 		ctx = context.Background()
@@ -23,6 +29,10 @@ func NewServer(ctx context.Context, cfg proxy.Config, verbose bool) *Server {
 	return &Server{ctx: ctx, Dialer: cfg.Dialer, Verbose: verbose}
 }
 
+// Serve accepts connections from ln and forwards each one to its original
+// destination.
+//
+// Each accepted connection is handled in its own goroutine.
 func (s *Server) Serve(ln net.Listener) error {
 	for {
 		c, err := ln.Accept()
@@ -46,7 +56,7 @@ func (s *Server) handle(conn net.Conn) error {
 
 	dst, ok := OriginalDst(conn)
 	if !ok {
-		return fmt.Errorf("original destination unavailable")
+		return errors.New("original destination unavailable")
 	}
 
 	up, err := s.Dialer.DialContext(ctx, "tcp", dst.String())

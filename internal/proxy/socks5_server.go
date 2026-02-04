@@ -10,12 +10,16 @@ import (
 	"github.com/die-net/conduit/internal/socks5"
 )
 
+// SOCKS5Server serves a SOCKS5 proxy listener.
+//
+// It currently supports no-auth negotiation and the CONNECT command.
 type SOCKS5Server struct {
 	ctx     context.Context
 	cfg     Config
 	Verbose bool
 }
 
+// NewSOCKS5Server constructs a SOCKS5Server.
 func NewSOCKS5Server(ctx context.Context, cfg Config, verbose bool) *SOCKS5Server {
 	if ctx == nil {
 		ctx = context.Background()
@@ -23,6 +27,9 @@ func NewSOCKS5Server(ctx context.Context, cfg Config, verbose bool) *SOCKS5Serve
 	return &SOCKS5Server{ctx: ctx, cfg: cfg, Verbose: verbose}
 }
 
+// Serve accepts connections from ln and serves SOCKS5.
+//
+// Each connection is handled in its own goroutine.
 func (s *SOCKS5Server) Serve(ln net.Listener) error {
 	for {
 		c, err := ln.Accept()

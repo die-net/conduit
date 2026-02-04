@@ -11,15 +11,23 @@ type directDialer struct {
 	keepAlive      net.KeepAliveConfig
 }
 
-func NewDirectDialer(cfg Config) Dialer {
+// NewDirectDialer returns a Dialer that dials destination addresses directly.
+func NewDirectDialer(cfg Config) (Dialer, error) {
 	dd := &directDialer{
 		dialer:         net.Dialer{Timeout: cfg.DialTimeout},
 		defaultNetwork: defaultNetwork(),
 		keepAlive:      cfg.KeepAlive,
 	}
-	return dd
+	return dd, nil
 }
 
+// DialContext does DNS lookups and TCP connect() and returns a plain
+// net.Conn to the destination.  For TCP connections it will also:
+//   - normalize network "tcp" to "tcp4" or "tcp6" when only one IP family is
+//     available, avoiding unnecessary DNS lookups for the other family.
+//   - enforce fully-qualified DNS lookups by appending a trailing '.' to
+//     hostnames, avoiding unnecessary DNS lookups for the DNS search path.
+//   - apply the configured TCP keepalive
 func (f *directDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	// Don't bother doing DNS lookups for protocols we don't support.
 	if network == "tcp" {

@@ -1,6 +1,6 @@
 # conduit
 
-`conduit` is a high-concurrency proxy service written in Go.
+`conduit` is a protocol-converting proxy service written in Go.
 
 It can accept inbound proxy traffic via:
 
@@ -11,8 +11,13 @@ It can accept inbound proxy traffic via:
 It can forward outbound connections:
 
 - Directly to the destination
-- Via an upstream HTTP proxy
-- Via an upstream SOCKS5 proxy
+- Via an upstream HTTP or HTTPS proxy (with optional basic auth)
+- Via an upstream SOCKS5 proxy (with optional user+pass)
+- Via an upstream SSH server using SSH dynamic port forwarding (like "ssh -D")
+
+The HTTP proxy (when not using the `CONNECT` method) uses the Go standard library's proxy support, inheriting its high performance, connection pooling, and standards conformance.
+
+The SOCKS5 proxy, the Linux transparent proxy, and HTTP proxy when using the `CONNECT` method pass TCP data as-is, without trying to interpret the protocol.  After setting up the connection, data is transferred on Linux via the zero-copy splice() mechanism to maximize throughput.
 
 ## Build
 
@@ -74,6 +79,14 @@ conduit \
   --upstream socks5://10.0.0.3:1080
 ```
 
+HTTP proxy that forwards outbound connections via an upstream SSH server:
+
+```bash
+conduit \
+  --http-listen 127.0.0.1:8080 \
+  --upstream ssh://user:pass@10.0.0.4:22
+```
+
 ## Flags
 
 Listener flags (any can be omitted to disable that listener):
@@ -89,7 +102,7 @@ Debug flags:
 
 Forwarding flags:
 
-- `--upstream=direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port`
+- `--upstream=direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user:pass@host:port`
 
 Timeout behavior:
 
@@ -120,6 +133,11 @@ TCP keepalive is optionally applied to all accepted TCP connections and all outb
 - **Upstream SOCKS5 forwarding** uses `github.com/txthinking/socks5`.
   - Outbound proxy connections are dialed with the internal dialer interface (`DialContext`).
   - SOCKS5 negotiation and CONNECT are performed via shared helpers in `internal/socks5` (built on the library's low-level protocol API).
+- **Upstream SSH forwarding** uses `golang.org/x/crypto/ssh`.
+  - A single SSH transport connection is established lazily and reused.
+  - Each proxied outbound connection opens a new `direct-tcpip` channel over the shared SSH transport.
+  - No host key checking is currently implemented, and auth is only possible via password.
+  - Servers commonly have a low limit of max forwarded connections (MaxSessions defaults to 10), which this doesn't handle well.
 - After connections are negotiated, we try to preserve the Linux zero-copy fast path.
 
 ## Linux transparent proxy (TPROXY)
@@ -141,6 +159,7 @@ Important notes:
   - Add explicit filtering/handling for hop-by-hop headers as needed for edge cases.
 - **Security/authentication**:
   - Add optional auth for HTTP proxy and SOCKS5.
+  - Add host key checking and public key auth for SSH dialer.
   - Add allow/deny lists.
 - **Observability**:
   - Structured logging.

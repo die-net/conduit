@@ -15,13 +15,18 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	echoLn := testutil.StartEchoTCPServer(t, ctx)
-	defer echoLn.Close()
+	echoLn, echoStop := testutil.StartEchoTCPServer(ctx, t)
+	defer echoStop()
+
+	dr, err := dialer.NewDirectDialer(dialer.Config{
+		DialTimeout: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	cfg := Config{
-		Dialer: dialer.NewDirectDialer(dialer.Config{
-			DialTimeout: 2 * time.Second,
-		}),
+		Dialer: dr,
 	}
 
 	ln, err := ListenTCP("tcp", "127.0.0.1:0", net.KeepAliveConfig{Enable: false})
@@ -48,10 +53,4 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	}
 
 	testutil.AssertEcho(t, c, c, []byte("hello"))
-
-	select {
-	case <-ctx.Done():
-		// ok
-	default:
-	}
 }
