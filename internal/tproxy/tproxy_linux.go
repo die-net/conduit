@@ -14,8 +14,11 @@ import (
 	"github.com/die-net/conduit/internal/proxy"
 )
 
-// ListenTransparentTCP listens on addr and enables IP_TRANSPARENT so the socket can accept redirected
-// connections (typical TPROXY setup). Note: you still need appropriate iptables/nft rules.
+// ListenTransparentTCP listens on addr and enables IP_TRANSPARENT so the socket
+// can accept redirected connections (typical TPROXY setup).
+//
+// Note: callers still need appropriate iptables/nftables rules to redirect
+// traffic to the listener.
 func ListenTransparentTCP(addr string, keepAliveConfig net.KeepAliveConfig) (net.Listener, error) {
 	lc := net.ListenConfig{Control: func(_, _ string, c syscall.RawConn) error {
 		var ctrlErr error
@@ -46,7 +49,10 @@ func isV6(tc *net.TCPConn) bool {
 	return false
 }
 
-// OriginalDst returns the original destination for a TCP connection redirected to this listener.
+// OriginalDst returns the original destination for a TCP connection redirected
+// to this listener.
+//
+// This relies on unix.SO_ORIGINAL_DST (getsockopt) and is supported on Linux.
 func OriginalDst(c net.Conn) (*net.TCPAddr, bool) {
 	tc, ok := c.(*net.TCPConn)
 	if !ok {

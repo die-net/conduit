@@ -38,7 +38,7 @@ func run() error {
 		tproxyListen = pflag.String("tproxy-listen", "", "Transparent proxy listen address (Linux only). Empty disables.")
 		debugListen  = pflag.String("debug-listen", "", "Debug HTTP listen address exposing /debug/pprof (e.g. 127.0.0.1:6060). Empty disables.")
 
-		upstream = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port")
+		upstream = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user:pass@host:port")
 
 		dialTimeout        = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound DNS lookup and TCP connect")
 		negotiationTimeout = pflag.Duration("negotiation-timeout", 10*time.Second, "Timeout for protocol negotiation to set up connection")
@@ -57,9 +57,9 @@ func run() error {
 
 	upScheme := strings.ToLower(strings.TrimSpace(upURL.Scheme))
 	if upScheme == "" {
-		return fmt.Errorf("invalid --upstream: missing scheme")
+		return errors.New("invalid --upstream: missing scheme")
 	}
-	if upScheme != "direct" && upScheme != "http" && upScheme != "https" && upScheme != "socks5" {
+	if upScheme != "direct" && upScheme != "http" && upScheme != "https" && upScheme != "socks5" && upScheme != "ssh" {
 		return fmt.Errorf("invalid --upstream scheme: %q", upURL.Scheme)
 	}
 
@@ -69,7 +69,7 @@ func run() error {
 	}
 
 	if *httpListen == "" && *socksListen == "" && *tproxyListen == "" {
-		return fmt.Errorf("no listeners enabled (set at least one of --http-listen, --socks5-listen, --tproxy-listen)")
+		return errors.New("no listeners enabled (set at least one of --http-listen, --socks5-listen, --tproxy-listen)")
 	}
 
 	cfg := proxy.Config{
@@ -87,9 +87,9 @@ func run() error {
 	switch upScheme {
 	case "direct":
 		cfg.Dialer = dialer.NewDirectDialer(dialCfg)
-	case "http", "https", "socks5":
+	case "http", "https", "socks5", "ssh":
 		if strings.TrimSpace(upURL.Host) == "" {
-			return fmt.Errorf("invalid --upstream: missing host")
+			return errors.New("invalid --upstream: missing host")
 		}
 		_, port, err := net.SplitHostPort(upURL.Host)
 		if err != nil {
@@ -100,9 +100,11 @@ func run() error {
 				upURL.Host = net.JoinHostPort(upURL.Host, "443")
 			case "socks5":
 				upURL.Host = net.JoinHostPort(upURL.Host, "1080")
+			case "ssh":
+				upURL.Host = net.JoinHostPort(upURL.Host, "22")
 			}
 		} else if port == "" {
-			return fmt.Errorf("invalid --upstream: missing port")
+			return errors.New("invalid --upstream: missing port")
 		}
 
 		var user, pass string
@@ -116,9 +118,11 @@ func run() error {
 			cfg.Dialer = dialer.NewHTTPProxyDialer(dialCfg, upURL, user, pass)
 		case "socks5":
 			cfg.Dialer = dialer.NewSOCKS5ProxyDialer(dialCfg, upURL.Host, user, pass)
+		case "ssh":
+			cfg.Dialer = dialer.NewSSHProxyDialer(dialCfg, upURL.Host, user, pass)
 		}
 	default:
-		return fmt.Errorf("unreachable upstream scheme")
+		return errors.New("unreachable upstream scheme")
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
@@ -211,14 +215,14 @@ func run() error {
 		err = nil
 	}
 
-	log.Printf("shutting down")
+	log.Print("shutting down")
 	return err
 }
 
 func parseTCPKeepAlive(s string) (net.KeepAliveConfig, error) {
 	s = strings.TrimSpace(strings.ToLower(s))
 	if s == "" {
-		return net.KeepAliveConfig{}, fmt.Errorf("empty")
+		return net.KeepAliveConfig{}, errors.New("empty")
 	}
 	if s == "on" {
 		return net.KeepAliveConfig{Enable: true}, nil
@@ -229,7 +233,7 @@ func parseTCPKeepAlive(s string) (net.KeepAliveConfig, error) {
 
 	parts := strings.Split(s, ":")
 	if len(parts) != 3 {
-		return net.KeepAliveConfig{}, fmt.Errorf("expected on|off|keepidle:keepintvl:keepcnt")
+		return net.KeepAliveConfig{}, errors.New("expected on|off|keepidle:keepintvl:keepcnt")
 	}
 	keepIdle, err := parsePositiveSeconds(parts[0])
 	if err != nil {
@@ -258,7 +262,7 @@ func parsePositiveSeconds(s string) (time.Duration, error) {
 		return 0, err
 	}
 	if n <= 0 {
-		return 0, fmt.Errorf("must be > 0")
+		return 0, errors.New("must be > 0")
 	}
 	return time.Duration(n) * time.Second, nil
 }
@@ -269,7 +273,7 @@ func parsePositiveInt(s string) (int, error) {
 		return 0, err
 	}
 	if n <= 0 {
-		return 0, fmt.Errorf("must be > 0")
+		return 0, errors.New("must be > 0")
 	}
 	return n, nil
 }

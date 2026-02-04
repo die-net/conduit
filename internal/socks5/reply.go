@@ -8,23 +8,31 @@ import (
 )
 
 const (
-	// CmdConnect is connect command
+	// CmdConnect is the SOCKS5 CONNECT command value.
 	CmdConnect = txsocks5.CmdConnect
 )
 
+// Auth configures optional username/password authentication for SOCKS5
+// negotiation.
 type Auth struct {
 	Username string
 	Password string
 }
 
+// WriteCommandNotSupportedReply writes a SOCKS5 reply indicating that the
+// requested command is not supported.
 func WriteCommandNotSupportedReply(conn net.Conn, atyp byte) {
 	_, _ = newZeroAddrReply(txsocks5.RepCommandNotSupported, atyp).WriteTo(conn)
 }
 
+// WriteConnectionRefusedReply writes a SOCKS5 reply indicating that the
+// destination connection was refused.
 func WriteConnectionRefusedReply(conn net.Conn, atyp byte) {
 	_, _ = newZeroAddrReply(txsocks5.RepConnectionRefused, atyp).WriteTo(conn)
 }
 
+// WriteSuccessReply writes a SOCKS5 success reply using localAddr as the bound
+// address.
 func WriteSuccessReply(conn net.Conn, localAddr net.Addr) error {
 	a, addr, port, err := txsocks5.ParseAddress(localAddr.String())
 	if err != nil {

@@ -1,6 +1,7 @@
 package socks5
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -39,7 +40,7 @@ func TestClientDialToServer(t *testing.T) {
 					return err
 				}
 				if req.Cmd != CmdConnect {
-					return err
+					return fmt.Errorf("unexpected command: %d", req.Cmd)
 				}
 
 				return WriteSuccessReply(serverConn, &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 12345})

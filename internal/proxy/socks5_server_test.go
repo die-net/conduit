@@ -15,7 +15,7 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	echoLn := testutil.StartEchoTCPServer(t, ctx)
+	echoLn := testutil.StartEchoTCPServer(ctx, t)
 	defer echoLn.Close()
 
 	cfg := Config{

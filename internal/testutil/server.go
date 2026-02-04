@@ -7,7 +7,14 @@ import (
 	"testing"
 )
 
-func StartSingleAcceptServer(t *testing.T, ctx context.Context, handler func(net.Conn)) (net.Listener, func()) {
+// StartSingleAcceptServer starts a TCP listener on 127.0.0.1:0 and accepts
+// exactly one connection.
+//
+// The accepted connection is passed to handler and then closed.
+//
+// The returned wait func closes the listener and waits for the handler
+// goroutine to exit.
+func StartSingleAcceptServer(ctx context.Context, t *testing.T, handler func(net.Conn)) (net.Listener, func()) {
 	t.Helper()
 
 	lc := net.ListenConfig{}

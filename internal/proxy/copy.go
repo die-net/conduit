@@ -9,6 +9,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// CopyBidirectional proxies bytes between left and right until one side
+// returns an error or ctx is canceled.
+//
+// It intentionally avoids setting deadlines so io.Copy can use Go's zero-copy
+// fast path when available.
+//
+// When ctx is canceled, both connections are closed to unblock any pending
+// copies.
 func CopyBidirectional(ctx context.Context, left, right net.Conn) error {
 	// There can't be deadlines set on arguments to io.Copy to be able
 	// to use Go's zero-copy hot path that uses splice.  Instead,

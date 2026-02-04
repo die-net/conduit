@@ -9,6 +9,8 @@ type bufferPool struct {
 	pool sync.Pool
 }
 
+// NewBufferPool returns an httputil.BufferPool that allocates fixed-size
+// buffers.
 func NewBufferPool(size int) httputil.BufferPool {
 	bp := &bufferPool{}
 	bp.pool.New = func() any {

@@ -62,11 +62,62 @@ linters:
       require-specific: true # require nolint directives to be specific about which linter is being skipped
     revive:
       rules:
+        - name: atomic
+        - name: bare-return
+        - name: blank-imports
+        - name: confusing-naming
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: datarace
+        - name: deep-exit
+        - name: defer
+        - name: dot-imports
+        - name: duplicated-imports
+        - name: early-return
+        - name: empty-block
+        - name: empty-block
+        - name: empty-lines
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+        - name: forbidden-call-in-wg-go
+        - name: get-return
+        - name: if-return
+        - name: import-shadowing
+        - name: increment-decrement
         - name: indent-error-flow
+        - name: inefficient-map-lookup
+        - name: modifies-value-receiver
+        - name: package-directory-mismatch
+        - name: range-val-address
+        - name: range-val-in-closure
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: string-of-int
+        - name: struct-tag
+        - name: superfluous-else
+        - name: time-date
+        - name: time-equal
+        - name: time-naming
+        - name: unconditional-recursion
         - name: unexported-return
-          disabled: true
+        - name: unnecessary-if
+        - name: unnecessary-format
+        - name: unnecessary-stmt
+        - name: unreachable-code
         - name: unused-parameter
         - name: unused-receiver
+        - name: use-any
+        - name: use-errors-new
+        - name: use-waitgroup-go
+        - name: useless-break
+        - name: useless-fallthrough
+        - name: var-declaration
+        - name: var-naming
+        - name: waitgroup-by-value
   exclusions:
     rules:
     - linters:

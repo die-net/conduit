@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"time"
 )
 
+// HTTPProxyDialer dials outbound TCP connections via an HTTP or HTTPS proxy
+// using the HTTP CONNECT method.
 type HTTPProxyDialer struct {
 	cfg      Config
 	proxyURL *url.URL
@@ -20,6 +23,9 @@ type HTTPProxyDialer struct {
 	direct   Dialer
 }
 
+// NewHTTPProxyDialer constructs an HTTP CONNECT dialer for proxyURL.
+//
+// If username is non-empty, Proxy-Authorization is set using HTTP Basic auth.
 func NewHTTPProxyDialer(cfg Config, proxyURL *url.URL, username, password string) Dialer {
 	auth := ""
 	if username != "" {
@@ -34,6 +40,7 @@ func NewHTTPProxyDialer(cfg Config, proxyURL *url.URL, username, password string
 	}
 }
 
+// ProxyAddr returns the proxy host:port.
 func (f *HTTPProxyDialer) ProxyAddr() string {
 	if f.proxyURL == nil {
 		return ""
@@ -41,17 +48,29 @@ func (f *HTTPProxyDialer) ProxyAddr() string {
 	return f.proxyURL.Host
 }
 
+// ProxyURL returns the configured proxy URL.
 func (f *HTTPProxyDialer) ProxyURL() *url.URL {
 	return f.proxyURL
 }
 
+// Direct returns the underlying direct dialer used to reach the proxy.
 func (f *HTTPProxyDialer) Direct() Dialer {
 	return f.direct
 }
 
+// DialContext establishes a TCP connection to address via the configured
+// HTTP/HTTPS proxy, returned as a net.Conn.
+//
+// For HTTPS proxies, this performs a TLS handshake to the proxy before sending
+// CONNECT.
+//
+// CONNECT negotiation is performed synchronously before returning.
+//
+// If NegotiationTimeout is set, a deadline is applied during TLS and
+// CONNECT negotiation and cleared before returning.
 func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	if f.proxyURL == nil {
-		return nil, fmt.Errorf("http proxy connect: missing proxy url")
+		return nil, errors.New("http proxy connect: missing proxy url")
 	}
 	if !strings.HasPrefix(network, "tcp") {
 		return nil, fmt.Errorf("http proxy dial %s %s: unsupported network", network, address)
@@ -66,7 +85,7 @@ func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 		hostname := f.proxyURL.Hostname()
 		if hostname == "" {
 			_ = c.Close()
-			return nil, fmt.Errorf("http proxy connect: invalid proxy host")
+			return nil, errors.New("http proxy connect: invalid proxy host")
 		}
 		tlsConn := tls.Client(c, &tls.Config{MinVersion: tls.VersionTLS12, ServerName: hostname})
 		if f.cfg.NegotiationTimeout > 0 {
