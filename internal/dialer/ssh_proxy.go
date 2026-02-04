@@ -43,8 +43,20 @@ type SSHProxyDialer struct {
 // The ssh server credentials come from username/password. Host key checking is
 // currently disabled (ssh.InsecureIgnoreHostKey), so this should only be used
 // in trusted environments.
-func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) Dialer {
-	return &SSHProxyDialer{cfg: cfg, sshAddr: sshAddr, username: username, password: password, direct: NewDirectDialer(cfg)}
+func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) (Dialer, error) {
+	if sshAddr == "" {
+		return nil, errors.New("ssh dialer: missing ssh address")
+	}
+	if username == "" {
+		return nil, errors.New("ssh dialer: missing username")
+	}
+
+	direct, err := NewDirectDialer(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SSHProxyDialer{cfg: cfg, sshAddr: sshAddr, username: username, password: password, direct: direct}, nil
 }
 
 // DialContext opens a new proxied TCP connection to address.
@@ -59,12 +71,6 @@ func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) Dialer {
 func (f *SSHProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	if !strings.HasPrefix(network, "tcp") {
 		return nil, fmt.Errorf("ssh upstream dial %s %s: unsupported network", network, address)
-	}
-	if strings.TrimSpace(f.sshAddr) == "" {
-		return nil, errors.New("ssh upstream: missing ssh address")
-	}
-	if f.username == "" {
-		return nil, errors.New("ssh upstream: missing username")
 	}
 
 	client, err := f.getClient(ctx)

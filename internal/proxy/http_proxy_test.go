@@ -22,12 +22,17 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 	echoLn, echoStop := testutil.StartEchoTCPServer(ctx, t)
 	defer echoStop()
 
+	dr, err := dialer.NewDirectDialer(dialer.Config{
+		DialTimeout: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	cfg := Config{
 		NegotiationTimeout: 2 * time.Second,
 		HTTPIdleTimeout:    1 * time.Second,
-		Dialer: dialer.NewDirectDialer(dialer.Config{
-			DialTimeout: 2 * time.Second,
-		}),
+		Dialer:             dr,
 	}
 
 	ln, err := ListenTCP("tcp", "127.0.0.1:0", net.KeepAliveConfig{Enable: false})
@@ -40,8 +45,8 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 	go func() { _ = srv.Serve(ln) }()
 	defer srv.Close()
 
-	d := net.Dialer{}
-	c, err := d.DialContext(ctx, "tcp", ln.Addr().String())
+	nd := net.Dialer{}
+	c, err := nd.DialContext(ctx, "tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,12 +89,17 @@ func BenchmarkHTTPProxyDirect(b *testing.B) {
 		b.Fatal(err)
 	}
 
+	dr, err := dialer.NewDirectDialer(dialer.Config{
+		DialTimeout: 2 * time.Second,
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+
 	cfg := Config{
 		NegotiationTimeout: 2 * time.Second,
 		HTTPIdleTimeout:    1 * time.Second,
-		Dialer: dialer.NewDirectDialer(dialer.Config{
-			DialTimeout: 2 * time.Second,
-		}),
+		Dialer:             dr,
 	}
 
 	ln, err := ListenTCP("tcp", "127.0.0.1:0", net.KeepAliveConfig{Enable: false})

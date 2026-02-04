@@ -2,6 +2,7 @@ package dialer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -23,8 +24,18 @@ type SOCKS5ProxyDialer struct {
 // NewSOCKS5ProxyDialer constructs a SOCKS5 CONNECT dialer for proxyAddr.
 //
 // If username is non-empty, username/password negotiation is used.
-func NewSOCKS5ProxyDialer(cfg Config, proxyAddr, username, password string) Dialer {
-	return &SOCKS5ProxyDialer{cfg: cfg, proxyAddr: proxyAddr, username: username, password: password, direct: NewDirectDialer(cfg)}
+
+func NewSOCKS5ProxyDialer(cfg Config, proxyAddr, username, password string) (Dialer, error) {
+	if proxyAddr == "" {
+		return nil, errors.New("socks5 proxy dialer: missing proxy address")
+	}
+
+	direct, err := NewDirectDialer(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SOCKS5ProxyDialer{cfg: cfg, proxyAddr: proxyAddr, username: username, password: password, direct: direct}, nil
 }
 
 // DialContext establishes a TCP connection to address via the configured SOCKS5

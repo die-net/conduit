@@ -12,13 +12,13 @@ type directDialer struct {
 }
 
 // NewDirectDialer returns a Dialer that dials destination addresses directly.
-func NewDirectDialer(cfg Config) Dialer {
+func NewDirectDialer(cfg Config) (Dialer, error) {
 	dd := &directDialer{
 		dialer:         net.Dialer{Timeout: cfg.DialTimeout},
 		defaultNetwork: defaultNetwork(),
 		keepAlive:      cfg.KeepAlive,
 	}
-	return dd
+	return dd, nil
 }
 
 // DialContext does DNS lookups and TCP connect() and returns a plain

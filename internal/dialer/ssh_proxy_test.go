@@ -27,7 +27,10 @@ func TestSSHProxyDialer_DialContext(t *testing.T) {
 	sshLn := startSSHDynamicForwardServer(ctx, t, "user", "pass")
 	defer sshLn.Close()
 
-	d := NewSSHProxyDialer(Config{DialTimeout: 2 * time.Second, NegotiationTimeout: 2 * time.Second}, sshLn.Addr().String(), "user", "pass")
+	d, err := NewSSHProxyDialer(Config{DialTimeout: 2 * time.Second, NegotiationTimeout: 2 * time.Second}, sshLn.Addr().String(), "user", "pass")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	c1, err := d.DialContext(ctx, "tcp", echoLn.Addr().String())
 	if err != nil {

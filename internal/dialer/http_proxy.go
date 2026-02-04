@@ -26,7 +26,22 @@ type HTTPProxyDialer struct {
 // NewHTTPProxyDialer constructs an HTTP CONNECT dialer for proxyURL.
 //
 // If username is non-empty, Proxy-Authorization is set using HTTP Basic auth.
-func NewHTTPProxyDialer(cfg Config, proxyURL *url.URL, username, password string) Dialer {
+func NewHTTPProxyDialer(cfg Config, proxyURL *url.URL, username, password string) (Dialer, error) {
+	if proxyURL == nil {
+		return nil, errors.New("http proxy dialer: missing proxy url")
+	}
+	if proxyURL.Hostname() == "" {
+		return nil, errors.New("http proxy dialer: invalid proxy host")
+	}
+	if proxyURL.Scheme != "http" && proxyURL.Scheme != "https" {
+		return nil, fmt.Errorf("http proxy dialer: unsupported scheme: %q", proxyURL.Scheme)
+	}
+
+	direct, err := NewDirectDialer(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	auth := ""
 	if username != "" {
 		auth = "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
@@ -36,15 +51,12 @@ func NewHTTPProxyDialer(cfg Config, proxyURL *url.URL, username, password string
 		cfg:      cfg,
 		proxyURL: proxyURL,
 		auth:     auth,
-		direct:   NewDirectDialer(cfg),
-	}
+		direct:   direct,
+	}, nil
 }
 
 // ProxyAddr returns the proxy host:port.
 func (f *HTTPProxyDialer) ProxyAddr() string {
-	if f.proxyURL == nil {
-		return ""
-	}
 	return f.proxyURL.Host
 }
 
@@ -69,9 +81,6 @@ func (f *HTTPProxyDialer) Direct() Dialer {
 // If NegotiationTimeout is set, a deadline is applied during TLS and
 // CONNECT negotiation and cleared before returning.
 func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	if f.proxyURL == nil {
-		return nil, errors.New("http proxy connect: missing proxy url")
-	}
 	if !strings.HasPrefix(network, "tcp") {
 		return nil, fmt.Errorf("http proxy dial %s %s: unsupported network", network, address)
 	}
@@ -83,10 +92,6 @@ func (f *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 
 	if strings.EqualFold(f.proxyURL.Scheme, "https") {
 		hostname := f.proxyURL.Hostname()
-		if hostname == "" {
-			_ = c.Close()
-			return nil, errors.New("http proxy connect: invalid proxy host")
-		}
 		tlsConn := tls.Client(c, &tls.Config{MinVersion: tls.VersionTLS12, ServerName: hostname})
 		if f.cfg.NegotiationTimeout > 0 {
 			_ = tlsConn.SetDeadline(time.Now().Add(f.cfg.NegotiationTimeout))

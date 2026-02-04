@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof" //nolint:gosec // Intentionally exposed on debug port.
-	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -50,19 +49,6 @@ func run() error {
 
 	pflag.Parse()
 
-	upURL, err := url.Parse(strings.TrimSpace(*upstream))
-	if err != nil {
-		return fmt.Errorf("invalid --upstream: %w", err)
-	}
-
-	upScheme := strings.ToLower(strings.TrimSpace(upURL.Scheme))
-	if upScheme == "" {
-		return errors.New("invalid --upstream: missing scheme")
-	}
-	if upScheme != "direct" && upScheme != "http" && upScheme != "https" && upScheme != "socks5" && upScheme != "ssh" {
-		return fmt.Errorf("invalid --upstream scheme: %q", upURL.Scheme)
-	}
-
 	ka, err := parseTCPKeepAlive(*tcpKeepAlive)
 	if err != nil {
 		return fmt.Errorf("invalid --tcp-keepalive: %w", err)
@@ -84,45 +70,9 @@ func run() error {
 		KeepAlive:          cfg.KeepAlive,
 	}
 
-	switch upScheme {
-	case "direct":
-		cfg.Dialer = dialer.NewDirectDialer(dialCfg)
-	case "http", "https", "socks5", "ssh":
-		if strings.TrimSpace(upURL.Host) == "" {
-			return errors.New("invalid --upstream: missing host")
-		}
-		_, port, err := net.SplitHostPort(upURL.Host)
-		if err != nil {
-			switch upScheme {
-			case "http":
-				upURL.Host = net.JoinHostPort(upURL.Host, "80")
-			case "https":
-				upURL.Host = net.JoinHostPort(upURL.Host, "443")
-			case "socks5":
-				upURL.Host = net.JoinHostPort(upURL.Host, "1080")
-			case "ssh":
-				upURL.Host = net.JoinHostPort(upURL.Host, "22")
-			}
-		} else if port == "" {
-			return errors.New("invalid --upstream: missing port")
-		}
-
-		var user, pass string
-		if upURL.User != nil {
-			user = upURL.User.Username()
-			pass, _ = upURL.User.Password()
-		}
-
-		switch upScheme {
-		case "http", "https":
-			cfg.Dialer = dialer.NewHTTPProxyDialer(dialCfg, upURL, user, pass)
-		case "socks5":
-			cfg.Dialer = dialer.NewSOCKS5ProxyDialer(dialCfg, upURL.Host, user, pass)
-		case "ssh":
-			cfg.Dialer = dialer.NewSSHProxyDialer(dialCfg, upURL.Host, user, pass)
-		}
-	default:
-		return errors.New("unreachable upstream scheme")
+	cfg.Dialer, err = dialer.New(dialCfg, *upstream)
+	if err != nil {
+		return fmt.Errorf("invalid --upstream: %w", err)
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())

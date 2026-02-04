@@ -65,7 +65,10 @@ func TestSOCKS5ProxyDialerDialSuccess(t *testing.T) {
 				_, _ = io.Copy(c, dst)
 			})
 
-			f := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), tt.user, tt.pass)
+			f, err := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), tt.user, tt.pass)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			conn, err := f.DialContext(ctx, "tcp", echoLn.Addr().String())
 			if err != nil {
@@ -103,7 +106,10 @@ func TestSOCKS5ProxyDialerDialContextCancel(t *testing.T) {
 		select {}
 	}()
 
-	f := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), "", "")
+	f, err := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = f.DialContext(ctx, "tcp", "127.0.0.1:1")
 	if err == nil {
@@ -129,9 +135,12 @@ func TestSOCKS5ProxyDialerDialFail(t *testing.T) {
 		socks5.WriteConnectionRefusedReply(c, req.Atyp)
 	})
 
-	f := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), "", "")
+	f, err := NewSOCKS5ProxyDialer(Config{DialTimeout: 2 * time.Second}, upLn.Addr().String(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	_, err := f.DialContext(ctx, "tcp", "127.0.0.1:1")
+	_, err = f.DialContext(ctx, "tcp", "127.0.0.1:1")
 	if err == nil {
 		t.Fatal("expected error")
 	}
