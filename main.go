@@ -42,6 +42,7 @@ func run() error {
 		dialTimeout        = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound DNS lookup and TCP connect")
 		negotiationTimeout = pflag.Duration("negotiation-timeout", 10*time.Second, "Timeout for protocol negotiation to set up connection")
 		httpIdleTimeout    = pflag.Duration("http-idle-timeout", 4*time.Minute, "Timeout for idle HTTP connections")
+		httpMaxIdleConns   = pflag.Int("http-max-idle-conns", 100, "Maximum number of idle HTTP connections")
 
 		tcpKeepAlive = pflag.String("tcp-keepalive", "45:45:3", "TCP keepalive: on|off|keepidle:keepintvl:keepcnt")
 		verbose      = pflag.Bool("verbose", false, "Enable per-connection error logging")
@@ -61,6 +62,7 @@ func run() error {
 	cfg := proxy.Config{
 		NegotiationTimeout: *negotiationTimeout,
 		HTTPIdleTimeout:    *httpIdleTimeout,
+		HTTPMaxIdleConns:   *httpMaxIdleConns,
 		KeepAlive:          ka,
 	}
 
