@@ -4,17 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/sync/singleflight"
+
+	internalssh "github.com/die-net/conduit/internal/ssh"
 )
 
 // SSHProxyDialer forwards outbound TCP connections through an SSH server.
@@ -32,13 +29,9 @@ import (
 //   - If opening a channel fails (e.g. the transport is dead), the dialer will
 //     discard the shared client, reconnect once, and retry the channel dial.
 type SSHProxyDialer struct {
-	cfg             Config
-	sshAddr         string
-	username        string
-	password        string
-	signer          ssh.Signer
-	hostKeyCallback ssh.HostKeyCallback
-	direct          Dialer
+	sshAddr   string
+	sshConfig internalssh.ClientConfig
+	direct    Dialer
 
 	mu     sync.Mutex
 	client *ssh.Client
@@ -67,13 +60,10 @@ func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) (Dialer, 
 
 	var signer ssh.Signer
 	if cfg.SSHKeyPath != "" {
-		keyData, err := os.ReadFile(cfg.SSHKeyPath)
+		var err error
+		signer, err = internalssh.LoadPrivateKey(cfg.SSHKeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("ssh dialer: reading key file: %w", err)
-		}
-		signer, err = ssh.ParsePrivateKey(keyData)
-		if err != nil {
-			return nil, fmt.Errorf("ssh dialer: parsing key file: %w", err)
+			return nil, fmt.Errorf("ssh dialer: %w", err)
 		}
 	}
 
@@ -81,7 +71,7 @@ func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) (Dialer, 
 		return nil, errors.New("ssh dialer: missing password or key")
 	}
 
-	hostKeyCallback, err := newHostKeyCallback(cfg.SSHKnownHostsPath)
+	hostKeyCallback, err := internalssh.NewHostKeyCallback(cfg.SSHKnownHostsPath)
 	if err != nil {
 		return nil, fmt.Errorf("ssh dialer: %w", err)
 	}
@@ -92,85 +82,16 @@ func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) (Dialer, 
 	}
 
 	return &SSHProxyDialer{
-		cfg:             cfg,
-		sshAddr:         sshAddr,
-		username:        username,
-		password:        password,
-		signer:          signer,
-		hostKeyCallback: hostKeyCallback,
-		direct:          direct,
-	}, nil
-}
-
-// newHostKeyCallback creates an ssh.HostKeyCallback for the given known_hosts
-// file path. If path is empty, host key checking is disabled. Otherwise, the
-// callback verifies host keys against the file, automatically adding unknown
-// hosts on first connection (trust on first use / TOFU).
-func newHostKeyCallback(path string) (ssh.HostKeyCallback, error) {
-	if path == "" {
-		return ssh.InsecureIgnoreHostKey(), nil //nolint:gosec // User explicitly disabled host key checking.
-	}
-
-	// Ensure the directory exists.
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("creating known_hosts directory: %w", err)
-	}
-
-	// Create the file if it doesn't exist.
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // Path is from user config.
-		if err != nil {
-			return nil, fmt.Errorf("creating known_hosts file: %w", err)
-		}
-		_ = f.Close()
-	}
-
-	// Load existing known hosts.
-	hostKeyCallback, err := knownhosts.New(path)
-	if err != nil {
-		return nil, fmt.Errorf("loading known_hosts: %w", err)
-	}
-
-	// Wrap the callback to implement trust-on-first-use (TOFU).
-	var mu sync.Mutex
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		err := hostKeyCallback(hostname, remote, key)
-		if err == nil {
-			return nil
-		}
-
-		// Check if this is a "key not found" error (unknown host).
-		var keyErr *knownhosts.KeyError
-		if !errors.As(err, &keyErr) {
-			return err
-		}
-
-		// If Want is non-empty, the host exists but with a different key.
-		// This is a potential MITM attack - reject it.
-		if len(keyErr.Want) > 0 {
-			return fmt.Errorf("host key mismatch for %s (possible MITM attack): %w", hostname, err)
-		}
-
-		// Unknown host - add it (TOFU).
-		mu.Lock()
-		defer mu.Unlock()
-
-		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // Path is from user config.
-		if err != nil {
-			return fmt.Errorf("opening known_hosts for writing: %w", err)
-		}
-		defer f.Close()
-
-		// knownhosts.Normalize normalizes the hostname for the known_hosts format.
-		normalizedHost := knownhosts.Normalize(hostname)
-		line := knownhosts.Line([]string{normalizedHost}, key)
-		if _, err := f.WriteString(line + "\n"); err != nil {
-			return fmt.Errorf("writing to known_hosts: %w", err)
-		}
-
-		log.Printf("ssh: added host key for %s to %s", hostname, path)
-		return nil
+		sshAddr: sshAddr,
+		sshConfig: internalssh.ClientConfig{
+			Username:         username,
+			Password:         password,
+			Signer:           signer,
+			HostKeyCallback:  hostKeyCallback,
+			Timeout:          cfg.DialTimeout,
+			HandshakeTimeout: cfg.NegotiationTimeout,
+		},
+		direct: direct,
 	}, nil
 }
 
@@ -271,50 +192,22 @@ func (f *SSHProxyDialer) getClient(ctx context.Context) (*ssh.Client, error) {
 
 // dialSSH establishes a new SSH transport connection and returns an *ssh.Client.
 //
-// It uses f.direct to create the underlying TCP connection and applies
-// f.cfg.NegotiationTimeout as a deadline for the SSH handshake.
+// It uses f.direct to create the underlying TCP connection.
 func (f *SSHProxyDialer) dialSSH(ctx context.Context) (*ssh.Client, error) {
-	c, err := f.direct.DialContext(ctx, "tcp", f.sshAddr)
+	conn, err := f.direct.DialContext(ctx, "tcp", f.sshAddr)
 	if err != nil {
-		return nil, fmt.Errorf("ssh upstream transport dial: %w", err)
+		return nil, fmt.Errorf("ssh transport dial: %w", err)
 	}
 
+	// Close conn if ctx is canceled during handshake.
 	stop := context.AfterFunc(ctx, func() {
-		_ = c.Close()
+		_ = conn.Close()
 	})
 	defer stop()
 
-	// Build auth methods. If both key and password are provided, offer both
-	// and let the server choose. Public key is offered first as it's
-	// generally preferred.
-	var authMethods []ssh.AuthMethod
-	if f.signer != nil {
-		authMethods = append(authMethods, ssh.PublicKeys(f.signer))
-	}
-	if f.password != "" {
-		authMethods = append(authMethods, ssh.Password(f.password))
-	}
-
-	clientConfig := &ssh.ClientConfig{
-		User:            f.username,
-		Auth:            authMethods,
-		HostKeyCallback: f.hostKeyCallback,
-		Timeout:         f.cfg.DialTimeout,
-	}
-
-	if f.cfg.NegotiationTimeout > 0 {
-		_ = c.SetDeadline(time.Now().Add(f.cfg.NegotiationTimeout))
-	}
-
-	cc, chans, reqs, err := ssh.NewClientConn(c, f.sshAddr, clientConfig)
+	client, err := internalssh.NewClient(conn, f.sshConfig, f.sshAddr)
 	if err != nil {
-		_ = c.Close()
-		return nil, fmt.Errorf("ssh upstream transport connect: %w", err)
-	}
-	client := ssh.NewClient(cc, chans, reqs)
-
-	if f.cfg.NegotiationTimeout > 0 {
-		_ = c.SetDeadline(time.Time{})
+		return nil, fmt.Errorf("ssh transport: %w", err)
 	}
 
 	return client, nil
