@@ -79,12 +79,21 @@ conduit \
   --upstream socks5://10.0.0.3:1080
 ```
 
-HTTP proxy that forwards outbound connections via an upstream SSH server:
+HTTP proxy that forwards outbound connections via an upstream SSH server (password auth):
 
 ```bash
 conduit \
   --http-listen 127.0.0.1:8080 \
   --upstream ssh://user:pass@10.0.0.4:22
+```
+
+HTTP proxy that forwards outbound connections via an upstream SSH server (key auth):
+
+```bash
+conduit \
+  --http-listen 127.0.0.1:8080 \
+  --upstream ssh://user@10.0.0.4:22 \
+  --ssh-key ~/.ssh/id_ed25519
 ```
 
 ## Flags
@@ -102,7 +111,8 @@ Debug flags:
 
 Forwarding flags:
 
-- `--upstream=direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user:pass@host:port`
+- `--upstream=direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user[:pass]@host:port`
+- `--ssh-key=path` (optional): Path to SSH private key file (OpenSSH format: RSA, Ed25519, ECDSA, or DSA). If both `--ssh-key` and a password in the URL are provided, both auth methods are offered to the server.
 
 Timeout behavior:
 
@@ -136,7 +146,8 @@ TCP keepalive is optionally applied to all accepted TCP connections and all outb
 - **Upstream SSH forwarding** uses `golang.org/x/crypto/ssh`.
   - A single SSH transport connection is established lazily and reused.
   - Each proxied outbound connection opens a new `direct-tcpip` channel over the shared SSH transport.
-  - No host key checking is currently implemented, and auth is only possible via password.
+  - Authentication supports password, public key (via `--ssh-key`), or both. If both are provided, both methods are offered to the server.
+  - No host key checking is currently implemented.
   - Servers commonly have a low limit of max forwarded connections (MaxSessions defaults to 10), which this doesn't handle well.
 - After connections are negotiated, we try to preserve the Linux zero-copy fast path.
 
@@ -159,7 +170,7 @@ Important notes:
   - Add explicit filtering/handling for hop-by-hop headers as needed for edge cases.
 - **Security/authentication**:
   - Add optional auth for HTTP proxy and SOCKS5.
-  - Add host key checking and public key auth for SSH dialer.
+  - Add host key checking for SSH dialer.
   - Add allow/deny lists.
 - **Observability**:
   - Structured logging.

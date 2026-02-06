@@ -37,7 +37,8 @@ func run() error {
 		tproxyListen = pflag.String("tproxy-listen", "", "Transparent proxy listen address (Linux only). Empty disables.")
 		debugListen  = pflag.String("debug-listen", "", "Debug HTTP listen address exposing /debug/pprof (e.g. 127.0.0.1:6060). Empty disables.")
 
-		upstream = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user:pass@host:port")
+		upstream   = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user[:pass]@host:port")
+		sshKeyPath = pflag.String("ssh-key", "", "Path to SSH private key file (OpenSSH format) for ssh:// upstream authentication")
 
 		dialTimeout        = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound DNS lookup and TCP connect")
 		negotiationTimeout = pflag.Duration("negotiation-timeout", 10*time.Second, "Timeout for protocol negotiation to set up connection")
@@ -70,6 +71,7 @@ func run() error {
 		DialTimeout:        *dialTimeout,
 		NegotiationTimeout: cfg.NegotiationTimeout,
 		KeepAlive:          cfg.KeepAlive,
+		SSHKeyPath:         *sshKeyPath,
 	}
 
 	cfg.Dialer, err = dialer.New(dialCfg, *upstream)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,7 @@ type SSHProxyDialer struct {
 	sshAddr  string
 	username string
 	password string
+	signer   ssh.Signer
 	direct   Dialer
 
 	mu     sync.Mutex
@@ -42,9 +44,13 @@ type SSHProxyDialer struct {
 // NewSSHProxyDialer constructs a dialer that forwards connections via an SSH
 // server at sshAddr.
 //
-// The ssh server credentials come from username/password. Host key checking is
-// currently disabled (ssh.InsecureIgnoreHostKey), so this should only be used
-// in trusted environments.
+// Authentication can use password, private key, or both. If both are provided,
+// both methods are offered to the server and it chooses which to use. The
+// private key path (cfg.SSHKeyPath) should point to an OpenSSH-format private
+// key file (RSA, Ed25519, ECDSA, or DSA).
+//
+// Host key checking is currently disabled (ssh.InsecureIgnoreHostKey), so this
+// should only be used in trusted environments.
 func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) (Dialer, error) {
 	if sshAddr == "" {
 		return nil, errors.New("ssh dialer: missing ssh address")
@@ -53,12 +59,28 @@ func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) (Dialer, 
 		return nil, errors.New("ssh dialer: missing username")
 	}
 
+	var signer ssh.Signer
+	if cfg.SSHKeyPath != "" {
+		keyData, err := os.ReadFile(cfg.SSHKeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("ssh dialer: reading key file: %w", err)
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return nil, fmt.Errorf("ssh dialer: parsing key file: %w", err)
+		}
+	}
+
+	if password == "" && signer == nil {
+		return nil, errors.New("ssh dialer: missing password or key")
+	}
+
 	direct, err := NewDirectDialer(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SSHProxyDialer{cfg: cfg, sshAddr: sshAddr, username: username, password: password, direct: direct}, nil
+	return &SSHProxyDialer{cfg: cfg, sshAddr: sshAddr, username: username, password: password, signer: signer, direct: direct}, nil
 }
 
 // DialContext opens a new proxied TCP connection to address.
@@ -171,9 +193,20 @@ func (f *SSHProxyDialer) dialSSH(ctx context.Context) (*ssh.Client, error) {
 	})
 	defer stop()
 
+	// Build auth methods. If both key and password are provided, offer both
+	// and let the server choose. Public key is offered first as it's
+	// generally preferred.
+	var authMethods []ssh.AuthMethod
+	if f.signer != nil {
+		authMethods = append(authMethods, ssh.PublicKeys(f.signer))
+	}
+	if f.password != "" {
+		authMethods = append(authMethods, ssh.Password(f.password))
+	}
+
 	clientConfig := &ssh.ClientConfig{
 		User:            f.username,
-		Auth:            []ssh.AuthMethod{ssh.Password(f.password)},
+		Auth:            authMethods,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // TODO: Fix me, as this is insecure.
 		Timeout:         f.cfg.DialTimeout,
 	}
