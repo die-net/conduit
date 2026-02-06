@@ -10,6 +10,7 @@ import (
 	_ "net/http/pprof" //nolint:gosec // Intentionally exposed on debug port.
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -37,8 +38,9 @@ func run() error {
 		tproxyListen = pflag.String("tproxy-listen", "", "Transparent proxy listen address (Linux only). Empty disables.")
 		debugListen  = pflag.String("debug-listen", "", "Debug HTTP listen address exposing /debug/pprof (e.g. 127.0.0.1:6060). Empty disables.")
 
-		upstream   = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user[:pass]@host:port")
-		sshKeyPath = pflag.String("ssh-key", "", "Path to SSH private key file (OpenSSH format) for ssh:// upstream authentication")
+		upstream      = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user[:pass]@host:port")
+		sshKeyPath    = pflag.String("ssh-key", "", "Path to SSH private key file (OpenSSH format) for ssh:// upstream authentication")
+		sshKnownHosts = pflag.String("ssh-known-hosts", defaultSSHKnownHostsPath(), "Path to known_hosts file for SSH host key verification, or 'off' to disable")
 
 		dialTimeout        = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound DNS lookup and TCP connect")
 		negotiationTimeout = pflag.Duration("negotiation-timeout", 10*time.Second, "Timeout for protocol negotiation to set up connection")
@@ -67,11 +69,18 @@ func run() error {
 		KeepAlive:          ka,
 	}
 
+	// Handle "off" for ssh-known-hosts to disable host key checking.
+	sshKnownHostsPath := *sshKnownHosts
+	if strings.EqualFold(sshKnownHostsPath, "off") {
+		sshKnownHostsPath = ""
+	}
+
 	dialCfg := dialer.Config{
 		DialTimeout:        *dialTimeout,
 		NegotiationTimeout: cfg.NegotiationTimeout,
 		KeepAlive:          cfg.KeepAlive,
 		SSHKeyPath:         *sshKeyPath,
+		SSHKnownHostsPath:  sshKnownHostsPath,
 	}
 
 	cfg.Dialer, err = dialer.New(dialCfg, *upstream)
@@ -230,4 +239,12 @@ func parsePositiveInt(s string) (int, error) {
 		return 0, errors.New("must be > 0")
 	}
 	return n, nil
+}
+
+func defaultSSHKnownHostsPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".ssh", "known_hosts")
 }

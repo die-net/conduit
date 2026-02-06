@@ -45,6 +45,9 @@ linters:
         - octalLiteral
         - unnamedResult
         - whyNoLint
+      settings:
+        hugeParam:
+          sizeThreshold: 100
     godox:
       keywords:
         - FIXME

@@ -113,6 +113,7 @@ Forwarding flags:
 
 - `--upstream=direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user[:pass]@host:port`
 - `--ssh-key=path` (optional): Path to SSH private key file (OpenSSH format: RSA, Ed25519, ECDSA, or DSA). If both `--ssh-key` and a password in the URL are provided, both auth methods are offered to the server.
+- `--ssh-known-hosts=path` (default: `~/.ssh/known_hosts`): Path to known_hosts file for SSH host key verification. Unknown hosts are automatically added on first connection (trust on first use). Set to `off` to disable host key checking.
 
 Timeout behavior:
 
@@ -147,7 +148,7 @@ TCP keepalive is optionally applied to all accepted TCP connections and all outb
   - A single SSH transport connection is established lazily and reused.
   - Each proxied outbound connection opens a new `direct-tcpip` channel over the shared SSH transport.
   - Authentication supports password, public key (via `--ssh-key`), or both. If both are provided, both methods are offered to the server.
-  - No host key checking is currently implemented.
+  - Host key checking uses `~/.ssh/known_hosts` by default (trust on first use). Can be disabled with `--ssh-known-hosts=off`.
   - Servers commonly have a low limit of max forwarded connections (MaxSessions defaults to 10), which this doesn't handle well.
 - After connections are negotiated, we try to preserve the Linux zero-copy fast path.
 
@@ -170,7 +171,6 @@ Important notes:
   - Add explicit filtering/handling for hop-by-hop headers as needed for edge cases.
 - **Security/authentication**:
   - Add optional auth for HTTP proxy and SOCKS5.
-  - Add host key checking for SSH dialer.
   - Add allow/deny lists.
 - **Observability**:
   - Structured logging.
