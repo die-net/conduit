@@ -14,4 +14,10 @@ type Config struct {
 	NegotiationTimeout time.Duration
 	// KeepAlive controls TCP keepalive settings applied to outbound TCP sockets.
 	KeepAlive net.KeepAliveConfig
+	// SSHKeyPath is the optional path to a private key file for SSH
+	// authentication (OpenSSH format). Supports RSA, Ed25519, ECDSA, and DSA.
+	SSHKeyPath string
+	// SSHKnownHostsPath is the path to the known_hosts file for SSH host key
+	// verification. Empty string disables host key checking.
+	SSHKnownHostsPath string
 }

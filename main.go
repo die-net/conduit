@@ -10,6 +10,7 @@ import (
 	_ "net/http/pprof" //nolint:gosec // Intentionally exposed on debug port.
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/die-net/conduit/internal/dialer"
 	"github.com/die-net/conduit/internal/proxy"
+	internalssh "github.com/die-net/conduit/internal/ssh"
 	"github.com/die-net/conduit/internal/tproxy"
 )
 
@@ -37,11 +39,14 @@ func run() error {
 		tproxyListen = pflag.String("tproxy-listen", "", "Transparent proxy listen address (Linux only). Empty disables.")
 		debugListen  = pflag.String("debug-listen", "", "Debug HTTP listen address exposing /debug/pprof (e.g. 127.0.0.1:6060). Empty disables.")
 
-		upstream = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user:pass@host:port")
+		upstream      = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user[:pass]@host:port")
+		sshKeyPath    = pflag.String("ssh-key", defaultSSHKeyPath(), "SSH key source: 'agent' for SSH agent, path to private key file, or empty to disable")
+		sshKnownHosts = pflag.String("ssh-known-hosts", defaultSSHKnownHostsPath(), "Path to known_hosts file for SSH host key verification, or 'off' to disable")
 
 		dialTimeout        = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound DNS lookup and TCP connect")
 		negotiationTimeout = pflag.Duration("negotiation-timeout", 10*time.Second, "Timeout for protocol negotiation to set up connection")
 		httpIdleTimeout    = pflag.Duration("http-idle-timeout", 4*time.Minute, "Timeout for idle HTTP connections")
+		httpMaxIdleConns   = pflag.Int("http-max-idle-conns", 100, "Maximum number of idle HTTP connections")
 
 		tcpKeepAlive = pflag.String("tcp-keepalive", "45:45:3", "TCP keepalive: on|off|keepidle:keepintvl:keepcnt")
 		verbose      = pflag.Bool("verbose", false, "Enable per-connection error logging")
@@ -61,6 +66,7 @@ func run() error {
 	cfg := proxy.Config{
 		NegotiationTimeout: *negotiationTimeout,
 		HTTPIdleTimeout:    *httpIdleTimeout,
+		HTTPMaxIdleConns:   *httpMaxIdleConns,
 		KeepAlive:          ka,
 	}
 
@@ -68,6 +74,8 @@ func run() error {
 		DialTimeout:        *dialTimeout,
 		NegotiationTimeout: cfg.NegotiationTimeout,
 		KeepAlive:          cfg.KeepAlive,
+		SSHKeyPath:         *sshKeyPath,
+		SSHKnownHostsPath:  *sshKnownHosts,
 	}
 
 	cfg.Dialer, err = dialer.New(dialCfg, *upstream)
@@ -226,4 +234,19 @@ func parsePositiveInt(s string) (int, error) {
 		return 0, errors.New("must be > 0")
 	}
 	return n, nil
+}
+
+func defaultSSHKnownHostsPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".ssh", "known_hosts")
+}
+
+func defaultSSHKeyPath() string {
+	if internalssh.AgentAvailable() {
+		return internalssh.AgentAuthType
+	}
+	return ""
 }

@@ -110,10 +110,14 @@ func newReverseProxy(cfg Config) *httputil.ReverseProxy {
 			return
 		}
 
-		// Allow schema override through a non-standard header.
+		// Allow schema override through a non-standard header.  If
+		// not supplied, assume explicitly mentioning port 443
+		// (which is not usually supplied) means https.
 		if s, ok := r.Header["X-Proxy-Scheme"]; ok {
 			delete(r.Header, "X-Proxy-Scheme")
 			r.URL.Scheme = s[0]
+		} else if r.URL.Port() == "443" {
+			r.URL.Scheme = "https"
 		} else if r.URL.Scheme == "" {
 			r.URL.Scheme = "http"
 		}
@@ -144,8 +148,8 @@ func newTransport(cfg Config) http.RoundTripper {
 	t := &http.Transport{
 		DialContext:         cfg.Dialer.DialContext,
 		ForceAttemptHTTP2:   true,
-		MaxIdleConns:        2048,
-		MaxIdleConnsPerHost: 1024,
+		MaxIdleConns:        cfg.HTTPMaxIdleConns,
+		MaxIdleConnsPerHost: (cfg.HTTPMaxIdleConns + 1) / 2,
 		IdleConnTimeout:     cfg.HTTPIdleTimeout,
 		TLSHandshakeTimeout: cfg.NegotiationTimeout,
 		TLSClientConfig: &tls.Config{
