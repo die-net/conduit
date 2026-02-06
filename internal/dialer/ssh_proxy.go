@@ -58,16 +58,12 @@ func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) (Dialer, 
 		return nil, errors.New("ssh dialer: missing username")
 	}
 
-	var signer ssh.Signer
-	if cfg.SSHKeyPath != "" {
-		var err error
-		signer, err = internalssh.LoadPrivateKey(cfg.SSHKeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("ssh dialer: %w", err)
-		}
+	signers, err := internalssh.LoadSigners(cfg.SSHKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("ssh dialer: %w", err)
 	}
 
-	if password == "" && signer == nil {
+	if password == "" && len(signers) == 0 {
 		return nil, errors.New("ssh dialer: missing password or key")
 	}
 
@@ -86,7 +82,7 @@ func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) (Dialer, 
 		sshConfig: internalssh.ClientConfig{
 			Username:         username,
 			Password:         password,
-			Signer:           signer,
+			Signers:          signers,
 			HostKeyCallback:  hostKeyCallback,
 			Timeout:          cfg.DialTimeout,
 			HandshakeTimeout: cfg.NegotiationTimeout,

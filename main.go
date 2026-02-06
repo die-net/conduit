@@ -21,6 +21,7 @@ import (
 
 	"github.com/die-net/conduit/internal/dialer"
 	"github.com/die-net/conduit/internal/proxy"
+	internalssh "github.com/die-net/conduit/internal/ssh"
 	"github.com/die-net/conduit/internal/tproxy"
 )
 
@@ -39,7 +40,7 @@ func run() error {
 		debugListen  = pflag.String("debug-listen", "", "Debug HTTP listen address exposing /debug/pprof (e.g. 127.0.0.1:6060). Empty disables.")
 
 		upstream      = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user[:pass]@host:port")
-		sshKeyPath    = pflag.String("ssh-key", "", "Path to SSH private key file (OpenSSH format) for ssh:// upstream authentication")
+		sshKeyPath    = pflag.String("ssh-key", defaultSSHKeyPath(), "SSH key source: 'agent' for SSH agent, path to private key file, or empty to disable")
 		sshKnownHosts = pflag.String("ssh-known-hosts", defaultSSHKnownHostsPath(), "Path to known_hosts file for SSH host key verification, or 'off' to disable")
 
 		dialTimeout        = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound DNS lookup and TCP connect")
@@ -69,18 +70,12 @@ func run() error {
 		KeepAlive:          ka,
 	}
 
-	// Handle "off" for ssh-known-hosts to disable host key checking.
-	sshKnownHostsPath := *sshKnownHosts
-	if strings.EqualFold(sshKnownHostsPath, "off") {
-		sshKnownHostsPath = ""
-	}
-
 	dialCfg := dialer.Config{
 		DialTimeout:        *dialTimeout,
 		NegotiationTimeout: cfg.NegotiationTimeout,
 		KeepAlive:          cfg.KeepAlive,
 		SSHKeyPath:         *sshKeyPath,
-		SSHKnownHostsPath:  sshKnownHostsPath,
+		SSHKnownHostsPath:  *sshKnownHosts,
 	}
 
 	cfg.Dialer, err = dialer.New(dialCfg, *upstream)
@@ -247,4 +242,11 @@ func defaultSSHKnownHostsPath() string {
 		return ""
 	}
 	return filepath.Join(home, ".ssh", "known_hosts")
+}
+
+func defaultSSHKeyPath() string {
+	if internalssh.AgentAvailable() {
+		return internalssh.AgentAuthType
+	}
+	return ""
 }

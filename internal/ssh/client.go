@@ -12,10 +12,11 @@ import (
 type ClientConfig struct {
 	// Username for SSH authentication.
 	Username string
-	// Password for password authentication (optional if Signer is set).
+	// Password for password authentication (optional if Signers is set).
 	Password string
-	// Signer for public key authentication (optional if Password is set).
-	Signer ssh.Signer
+	// Signers for public key authentication (optional if Password is set).
+	// Multiple signers are supported (e.g., from an SSH agent).
+	Signers []ssh.Signer
 	// HostKeyCallback verifies the server's host key.
 	HostKeyCallback ssh.HostKeyCallback
 	// Timeout is the maximum time for the TCP connection (used by ssh.ClientConfig).
@@ -28,8 +29,8 @@ type ClientConfig struct {
 // Public key authentication is offered first if available, followed by password.
 func (c *ClientConfig) AuthMethods() []ssh.AuthMethod {
 	var methods []ssh.AuthMethod
-	if c.Signer != nil {
-		methods = append(methods, ssh.PublicKeys(c.Signer))
+	if len(c.Signers) > 0 {
+		methods = append(methods, ssh.PublicKeys(c.Signers...))
 	}
 	if c.Password != "" {
 		methods = append(methods, ssh.Password(c.Password))
@@ -47,11 +48,22 @@ func (c *ClientConfig) AuthMethods() []ssh.AuthMethod {
 //
 // On error, conn is closed.
 func NewClient(conn net.Conn, cfg ClientConfig, addr string) (*ssh.Client, error) {
+	// Define the preferred host key algorithms in order of preference to match modern OpenSSH.
+	preferredAlgos := []string{
+		ssh.KeyAlgoED25519,
+		ssh.KeyAlgoECDSA521,
+		ssh.KeyAlgoECDSA384,
+		ssh.KeyAlgoECDSA256,
+		ssh.KeyAlgoRSASHA512, // rsa-sha2-512
+		ssh.KeyAlgoRSASHA256, // rsa-sha2-256
+	}
+
 	sshConfig := &ssh.ClientConfig{
-		User:            cfg.Username,
-		Auth:            cfg.AuthMethods(),
-		HostKeyCallback: cfg.HostKeyCallback,
-		Timeout:         cfg.Timeout,
+		User:              cfg.Username,
+		Auth:              cfg.AuthMethods(),
+		HostKeyCallback:   cfg.HostKeyCallback,
+		HostKeyAlgorithms: preferredAlgos,
+		Timeout:           cfg.Timeout,
 	}
 
 	if cfg.HandshakeTimeout > 0 {
