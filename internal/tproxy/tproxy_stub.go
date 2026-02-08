@@ -1,4 +1,4 @@
-//go:build !linux
+//go:build !linux && !freebsd && !openbsd
 
 package tproxy
 
@@ -7,12 +7,15 @@ import (
 	"net"
 )
 
-// ListenTransparentTCP is not supported on non-Linux platforms.
+// IsSupported is true on TPROXY-supporting OSes.
+const IsSupported = false
+
+// ListenTransparentTCP is not supported on this platform.
 func ListenTransparentTCP(_ string, _ net.KeepAliveConfig) (net.Listener, error) {
-	return nil, errors.New("transparent proxy is only supported on linux")
+	return nil, errors.New("transparent proxy is only supported on Linux, FreeBSD, and OpenBSD")
 }
 
-// OriginalDst is not supported on non-Linux platforms.
+// OriginalDst is not supported on this platform.
 func OriginalDst(_ net.Conn) (*net.TCPAddr, bool) {
 	return nil, false
 }

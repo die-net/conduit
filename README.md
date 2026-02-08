@@ -6,7 +6,7 @@ It can accept inbound proxy traffic via:
 
 - HTTP proxy (including `CONNECT` for HTTPS tunneling)
 - SOCKS5 proxy (no-auth)
-- Linux transparent proxy listener (TPROXY-style; Linux-only)
+- Transparent proxy listener (Linux, FreeBSD, or OpenBSD)
 
 It can forward outbound connections:
 
@@ -17,7 +17,7 @@ It can forward outbound connections:
 
 The HTTP proxy (when not using the `CONNECT` method) uses the Go standard library's proxy support, inheriting its high performance, connection pooling, and standards conformance.
 
-The SOCKS5 proxy, the Linux transparent proxy, and HTTP proxy when using the `CONNECT` method pass TCP data as-is, without trying to interpret the protocol.  After setting up the connection, data is transferred on Linux via the zero-copy splice() mechanism to maximize throughput.
+The SOCKS5 proxy, the transparent proxy, and HTTP proxy when using the `CONNECT` method pass TCP data as-is, without trying to interpret the protocol.  After setting up the connection, data is transferred on Linux via the zero-copy splice() mechanism to maximize throughput.
 
 ## Build
 
@@ -120,6 +120,7 @@ Debug flags:
 Forwarding flags:
 
 - `--upstream=direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user[:pass]@host:port`
+  You can use the `ALL_PROXY` environment variable instead of the `--upstream` flag to set this, which might be better if it includes a password.
 - `--ssh-key=agent|path|""` (default: `agent` if `SSH_AUTH_SOCK` is set, else empty): SSH key source for ssh:// upstream. Use `agent` for SSH agent, a file path for a private key (OpenSSH format), or empty to disable key auth. If both key and password are provided, both methods are offered to the server.
 - `--ssh-known-hosts=path|""` (default: `~/.ssh/known_hosts`): Path to known_hosts file for SSH host key verification. Unknown hosts are automatically added on first connection (trust on first use). Empty disables host verification.
 
@@ -160,15 +161,52 @@ TCP keepalive is optionally applied to all accepted TCP connections and all outb
   - Servers commonly have a low limit of max forwarded connections (MaxSessions defaults to 10), which this doesn't handle well.
 - After connections are negotiated, we try to preserve the Linux zero-copy fast path.
 
-## Linux transparent proxy (TPROXY)
+## Transparent proxy (TPROXY)
 
-The Linux transparent proxy listener is intended for TPROXY-style deployments.
+The transparent proxy listener intercepts redirected TCP connections and forwards them to their original destinations.
 
-Important notes:
+### Linux
 
-- You still need appropriate **routing and firewall rules** (iptables/nftables) to redirect traffic.
-- The implementation uses `golang.org/x/sys/unix` and `unix.SO_ORIGINAL_DST` to retrieve the original destination via `getsockopt` for both IPv4 and IPv6.
-- On non-Linux platforms, `--tproxy-listen` returns an error (build remains portable).
+Uses `IP_TRANSPARENT` socket option and `SO_ORIGINAL_DST` to retrieve the original destination.
+
+- Requires appropriate **iptables/nftables TPROXY rules** to redirect traffic.
+- Example iptables rule:
+  ```bash
+  iptables -t mangle -A PREROUTING -p tcp --dport 80 -j TPROXY \
+    --tproxy-mark 0x1/0x1 --on-port 8080
+  ```
+
+### FreeBSD
+
+Uses `IP_BINDANY` socket option. The original destination is preserved in the socket's local address by IPFW/PF.
+
+- Requires appropriate **IPFW fwd or PF rdr-to rules** to redirect traffic.
+- Requires root or `PRIV_NETINET_BINDANY` privilege.
+- Example IPFW rule:
+  ```bash
+  ipfw add fwd 127.0.0.1,8080 tcp from any to any 80 in
+  ```
+- Example PF rule:
+  ```
+  pass in on em0 proto tcp to port 80 rdr-to 127.0.0.1 port 8080
+  ```
+
+### OpenBSD
+
+Uses `SO_BINDANY` socket option (at socket level, unlike FreeBSD's protocol level). The original destination is preserved in the socket's local address by PF.
+
+- Requires appropriate **PF rdr-to rules** to redirect traffic.
+- Requires root privileges.
+- May need `divert-reply` on outgoing rules for return traffic.
+- Example PF rules:
+  ```
+  pass in on em0 proto tcp to port 80 rdr-to 127.0.0.1 port 8080
+  pass out on em0 proto tcp divert-reply
+  ```
+
+### Other platforms
+
+On platforms other than Linux, FreeBSD, and OpenBSD, `--tproxy-listen` returns an error (build remains portable).
 
 ## TODO / Caveats
 

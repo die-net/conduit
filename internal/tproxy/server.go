@@ -17,7 +17,7 @@ import (
 // original destination (as reported by OriginalDst).
 type Server struct {
 	ctx     context.Context
-	Dialer  dialer.Dialer
+	Dialer  dialer.ContextDialer
 	Verbose bool
 }
 

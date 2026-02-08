@@ -14,6 +14,9 @@ import (
 	"github.com/die-net/conduit/internal/proxy"
 )
 
+// IsSupported is true on TPROXY-supporting OSes.
+const IsSupported = true
+
 // ListenTransparentTCP listens on addr and enables IP_TRANSPARENT so the socket
 // can accept redirected connections (typical TPROXY setup).
 //
