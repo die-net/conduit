@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/die-net/conduit/internal/conn"
 	"github.com/die-net/conduit/internal/dialer"
 )
 
@@ -21,7 +22,7 @@ import (
 // - non-CONNECT proxying (via httputil.ReverseProxy)
 type HTTPProxyServer struct {
 	ctx    context.Context
-	dialer dialer.Dialer
+	dialer dialer.ContextDialer
 	srv    *http.Server
 	rp     *httputil.ReverseProxy
 }
@@ -95,7 +96,7 @@ func (s *HTTPProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) 
 	_, _ = brw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
 	_ = brw.Flush()
 
-	_ = CopyBidirectional(ctx, clientConn, serverConn)
+	_ = conn.CopyBidirectional(ctx, clientConn, serverConn)
 }
 
 // writeError simulates http.Error() for use on a hijacked connection.

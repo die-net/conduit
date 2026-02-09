@@ -12,7 +12,7 @@ type directDialer struct {
 }
 
 // NewDirectDialer returns a Dialer that dials destination addresses directly.
-func NewDirectDialer(cfg Config) (Dialer, error) {
+func NewDirectDialer(cfg Config) (ContextDialer, error) {
 	dd := &directDialer{
 		dialer:         net.Dialer{Timeout: cfg.DialTimeout},
 		defaultNetwork: defaultNetwork(),

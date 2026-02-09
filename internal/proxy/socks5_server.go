@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/die-net/conduit/internal/conn"
 	"github.com/die-net/conduit/internal/socks5"
 )
 
@@ -46,25 +47,25 @@ func (s *SOCKS5Server) Serve(ln net.Listener) error {
 	}
 }
 
-func (s *SOCKS5Server) handleConn(conn net.Conn) error {
-	defer conn.Close()
+func (s *SOCKS5Server) handleConn(c net.Conn) error {
+	defer c.Close()
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
 
 	if s.cfg.NegotiationTimeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(s.cfg.NegotiationTimeout))
+		_ = c.SetDeadline(time.Now().Add(s.cfg.NegotiationTimeout))
 	}
 
-	if err := socks5.ServerNegotiateNoAuth(conn); err != nil {
+	if err := socks5.ServerNegotiateNoAuth(c); err != nil {
 		return err
 	}
 
-	req, err := socks5.ServerReadRequest(conn)
+	req, err := socks5.ServerReadRequest(c)
 	if err != nil {
 		return err
 	}
 	if req.Cmd != socks5.CmdConnect {
-		socks5.WriteCommandNotSupportedReply(conn, req.Atyp)
+		socks5.WriteCommandNotSupportedReply(c, req.Atyp)
 		return fmt.Errorf("unsupported command: %d", req.Cmd)
 	}
 
@@ -72,21 +73,21 @@ func (s *SOCKS5Server) handleConn(conn net.Conn) error {
 
 	up, err := s.cfg.Dialer.DialContext(ctx, "tcp", dst)
 	if err != nil {
-		socks5.WriteConnectionRefusedReply(conn, req.Atyp)
+		socks5.WriteConnectionRefusedReply(c, req.Atyp)
 		return err
 	}
 	defer up.Close()
 
-	if err := socks5.WriteSuccessReply(conn, up.LocalAddr()); err != nil {
+	if err := socks5.WriteSuccessReply(c, up.LocalAddr()); err != nil {
 		return err
 	}
 
 	if s.cfg.NegotiationTimeout > 0 {
-		_ = conn.SetDeadline(time.Time{})
+		_ = c.SetDeadline(time.Time{})
 	}
 
 	// Once we've finished the SOCKS5 handshake, switch to bidirectional proxying.
-	if err := CopyBidirectional(ctx, conn, up); err != nil {
+	if err := conn.CopyBidirectional(ctx, c, up); err != nil {
 		return fmt.Errorf("proxy: %w", err)
 	}
 	return nil

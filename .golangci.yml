@@ -3,12 +3,14 @@ version: "2"
 linters:
   default: none
   enable:
+    - asciicheck
     - bodyclose
     - copyloopvar
     - dogsled
     - dupl
     - errcheck
     - errorlint
+    - exhaustive
     - gocheckcompilerdirectives
     - gochecknoinits
     - gocritic
@@ -18,16 +20,20 @@ linters:
     - govet
     - intrange
     - ineffassign
+    - makezero
     - misspell
     - nakedret
     - noctx
     - nolintlint
+    - prealloc
+    - predeclared
     - revive
     - staticcheck
     - testifylint
     - unconvert
     - unparam
     - unused
+    - wastedassign
     - whitespace
 
   settings:
@@ -41,10 +47,7 @@ linters:
         - performance
         - style
       disabled-checks:
-        - ifElseChain
-        - octalLiteral
         - unnamedResult
-        - whyNoLint
       settings:
         hugeParam:
           sizeThreshold: 100
@@ -53,8 +56,36 @@ linters:
         - FIXME
     govet:
       enable:
+        - asmdecl
+        - assign
+        - atomic
+        - atomicalign
+        - bools
+        - buildtag
+        - cgocall
+        - composites
+        - copylocks
+        - errorsas
+        - findcall
+        - httpresponse
+        - ifaceassert
+        - loopclosure
+        - lostcancel
+        - nilfunc
         - nilness
+        - printf
         - shadow
+        - shift
+        - sortslice
+        - stdmethods
+        - stringintconv
+        - structtag
+        - testinggoroutine
+        - tests
+        - unmarshal
+        - unreachable
+        - unsafeptr
+        - unusedresult
     errorlint:
       asserts: false
     misspell:

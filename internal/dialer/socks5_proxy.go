@@ -18,13 +18,13 @@ type SOCKS5ProxyDialer struct {
 	proxyAddr string
 	username  string
 	password  string
-	direct    Dialer
+	direct    ContextDialer
 }
 
 // NewSOCKS5ProxyDialer constructs a SOCKS5 CONNECT dialer for proxyAddr.
 //
 // If username is non-empty, username/password negotiation is used.
-func NewSOCKS5ProxyDialer(cfg Config, proxyAddr, username, password string) (Dialer, error) {
+func NewSOCKS5ProxyDialer(cfg Config, proxyAddr, username, password string) (ContextDialer, error) {
 	if proxyAddr == "" {
 		return nil, errors.New("socks5 proxy dialer: missing proxy address")
 	}

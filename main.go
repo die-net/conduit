@@ -19,9 +19,10 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/die-net/conduit/internal/conn"
 	"github.com/die-net/conduit/internal/dialer"
 	"github.com/die-net/conduit/internal/proxy"
-	internalssh "github.com/die-net/conduit/internal/ssh"
+	"github.com/die-net/conduit/internal/ssh"
 	"github.com/die-net/conduit/internal/tproxy"
 )
 
@@ -36,22 +37,26 @@ func run() error {
 	var (
 		httpListen   = pflag.String("http-listen", "", "HTTP proxy listen address (e.g. 127.0.0.1:8080). Empty disables.")
 		socksListen  = pflag.String("socks5-listen", "", "SOCKS5 proxy listen address (e.g. 127.0.0.1:1080). Empty disables.")
-		tproxyListen = pflag.String("tproxy-listen", "", "Transparent proxy listen address (Linux only). Empty disables.")
-		debugListen  = pflag.String("debug-listen", "", "Debug HTTP listen address exposing /debug/pprof (e.g. 127.0.0.1:6060). Empty disables.")
+		tproxyListen = pflag.String("tproxy-listen", "", "Transparent proxy listen address (e.g. 127.0.0.1:1234). Empty disables.")
 
-		upstream      = pflag.String("upstream", "direct://", "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user[:pass]@host:port")
-		sshKeyPath    = pflag.String("ssh-key", defaultSSHKeyPath(), "SSH key source: 'agent' for SSH agent, path to private key file, or empty to disable")
-		sshKnownHosts = pflag.String("ssh-known-hosts", defaultSSHKnownHostsPath(), "Path to known_hosts file for SSH host key verification, or 'off' to disable")
+		upstream = pflag.String("upstream", defaultUpstream(), "Upstream forwarding target URL: direct:// | http://[user:pass@]host:port | https://[user:pass@]host:port | socks5://[user:pass@]host:port | ssh://user[:pass]@host:port")
 
+		debugListen        = pflag.String("debug-listen", "", "Debug HTTP listen address exposing /debug/pprof (e.g. 127.0.0.1:6060). Empty disables.")
 		dialTimeout        = pflag.Duration("dial-timeout", 10*time.Second, "Timeout for outbound DNS lookup and TCP connect")
+		httpIdleTimeout    = pflag.Duration("http-idle-timeout", 4*time.Minute, "Timeout for idle HTTP proxy connections")
+		httpMaxIdleConns   = pflag.Int("http-max-idle-conns", 100, "Maximum number of idle HTTP proxy connections")
 		negotiationTimeout = pflag.Duration("negotiation-timeout", 10*time.Second, "Timeout for protocol negotiation to set up connection")
-		httpIdleTimeout    = pflag.Duration("http-idle-timeout", 4*time.Minute, "Timeout for idle HTTP connections")
-		httpMaxIdleConns   = pflag.Int("http-max-idle-conns", 100, "Maximum number of idle HTTP connections")
-
-		tcpKeepAlive = pflag.String("tcp-keepalive", "45:45:3", "TCP keepalive: on|off|keepidle:keepintvl:keepcnt")
-		verbose      = pflag.Bool("verbose", false, "Enable per-connection error logging")
+		sshKeyPath         = pflag.String("ssh-key", defaultSSHKeyPath(), "SSH key source: 'agent' for SSH agent, path to private key file, or empty to disable")
+		sshKnownHosts      = pflag.String("ssh-known-hosts", defaultSSHKnownHostsPath(), "Path to known_hosts file for SSH host key verification, or empty to disable")
+		tcpKeepAlive       = pflag.String("tcp-keepalive", "45:45:3", "TCP keepalive: on|off|keepidle:keepintvl:keepcnt")
+		verbose            = pflag.Bool("verbose", false, "Enable per-connection error logging")
 	)
 
+	if !tproxy.IsSupported {
+		_ = pflag.CommandLine.MarkHidden("tproxy-listen")
+	}
+
+	pflag.CommandLine.SortFlags = false
 	pflag.Parse()
 
 	ka, err := parseTCPKeepAlive(*tcpKeepAlive)
@@ -110,7 +115,7 @@ func run() error {
 	}
 
 	if *httpListen != "" {
-		ln, err := proxy.ListenTCP("tcp", *httpListen, cfg.KeepAlive)
+		ln, err := conn.ListenTCP("tcp", *httpListen, cfg.KeepAlive)
 		if err != nil {
 			return fmt.Errorf("http listen: %w", err)
 		}
@@ -130,7 +135,7 @@ func run() error {
 	}
 
 	if *socksListen != "" {
-		ln, err := proxy.ListenTCP("tcp", *socksListen, cfg.KeepAlive)
+		ln, err := conn.ListenTCP("tcp", *socksListen, cfg.KeepAlive)
 		if err != nil {
 			return fmt.Errorf("socks5 listen: %w", err)
 		}
@@ -236,6 +241,18 @@ func parsePositiveInt(s string) (int, error) {
 	return n, nil
 }
 
+func defaultUpstream() string {
+	if p := os.Getenv("ALL_PROXY"); p != "" {
+		return p
+	}
+
+	if p := os.Getenv("all_proxy"); p != "" {
+		return p
+	}
+
+	return "direct://"
+}
+
 func defaultSSHKnownHostsPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -245,8 +262,8 @@ func defaultSSHKnownHostsPath() string {
 }
 
 func defaultSSHKeyPath() string {
-	if internalssh.AgentAvailable() {
-		return internalssh.AgentAuthType
+	if ssh.AgentAvailable() {
+		return ssh.AgentAuthType
 	}
 	return ""
 }

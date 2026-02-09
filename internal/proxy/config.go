@@ -19,5 +19,5 @@ type Config struct {
 
 	KeepAlive net.KeepAliveConfig
 
-	Dialer dialer.Dialer
+	Dialer dialer.ContextDialer
 }

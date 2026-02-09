@@ -11,8 +11,11 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/die-net/conduit/internal/proxy"
+	"github.com/die-net/conduit/internal/conn"
 )
+
+// IsSupported is true on TPROXY-supporting OSes.
+const IsSupported = true
 
 // ListenTransparentTCP listens on addr and enables IP_TRANSPARENT so the socket
 // can accept redirected connections (typical TPROXY setup).
@@ -34,7 +37,7 @@ func ListenTransparentTCP(addr string, keepAliveConfig net.KeepAliveConfig) (net
 	if err != nil {
 		return nil, fmt.Errorf("listen tproxy %s: %w", addr, err)
 	}
-	return &proxy.KeepAliveListener{Listener: ln, KeepAliveConfig: keepAliveConfig}, nil
+	return &conn.KeepAliveListener{Listener: ln, KeepAliveConfig: keepAliveConfig}, nil
 }
 
 // isV6 looks up the connection's local address and returns whether it is

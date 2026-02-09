@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 
+	"github.com/die-net/conduit/internal/conn"
 	"github.com/die-net/conduit/internal/dialer"
 	"github.com/die-net/conduit/internal/proxy"
 )
@@ -17,7 +18,7 @@ import (
 // original destination (as reported by OriginalDst).
 type Server struct {
 	ctx     context.Context
-	Dialer  dialer.Dialer
+	Dialer  dialer.ContextDialer
 	Verbose bool
 }
 
@@ -49,12 +50,12 @@ func (s *Server) Serve(ln net.Listener) error {
 	}
 }
 
-func (s *Server) handle(conn net.Conn) error {
-	defer conn.Close()
+func (s *Server) handle(c net.Conn) error {
+	defer c.Close()
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
 
-	dst, ok := OriginalDst(conn)
+	dst, ok := OriginalDst(c)
 	if !ok {
 		return errors.New("original destination unavailable")
 	}
@@ -65,7 +66,7 @@ func (s *Server) handle(conn net.Conn) error {
 	}
 	defer up.Close()
 
-	if err := proxy.CopyBidirectional(ctx, conn, up); err != nil {
+	if err := conn.CopyBidirectional(ctx, c, up); err != nil {
 		return fmt.Errorf("proxy: %w", err)
 	}
 	return nil

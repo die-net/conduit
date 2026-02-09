@@ -1,4 +1,4 @@
-package proxy
+package conn
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 //
 // When ctx is canceled, both connections are closed to unblock any pending
 // copies.
-func CopyBidirectional(ctx context.Context, left, right net.Conn) error {
+func CopyBidirectional(ctx context.Context, left, right io.ReadWriteCloser) error {
 	g, gctx := errgroup.WithContext(ctx)
 	context.AfterFunc(gctx, func() {
 		_ = left.Close()
@@ -43,7 +43,7 @@ func CopyBidirectional(ctx context.Context, left, right net.Conn) error {
 
 // copyClose does an io.Copy to dst from src, then CloseWrite (graceful TCP
 // half-close) or Close dst.
-func copyClose(dst, src net.Conn) error {
+func copyClose(dst, src io.ReadWriteCloser) error {
 	_, err := io.Copy(dst, src)
 
 	// We double-close in some cases, so ignore this error.
