@@ -49,11 +49,11 @@ func NewSSHProxyDialer(cfg Config, sshAddr, username, password string) (ContextD
 	}
 
 	return ssh.NewClient(sshAddr, ssh.ClientConfig{
-		Username:         username,
-		Password:         password,
-		Signers:          signers,
-		HostKeyCallback:  hostKeyCallback,
-		Timeout:          cfg.DialTimeout,
-		HandshakeTimeout: cfg.NegotiationTimeout,
+		Username:           username,
+		Password:           password,
+		Signers:            signers,
+		HostKeyCallback:    hostKeyCallback,
+		DialTimeout:        cfg.DialTimeout,
+		NegotiationTimeout: cfg.NegotiationTimeout,
 	}, direct)
 }

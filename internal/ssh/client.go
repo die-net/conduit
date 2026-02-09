@@ -31,9 +31,9 @@ type ClientConfig struct {
 	// HostKeyCallback verifies the server's host key.
 	HostKeyCallback ssh.HostKeyCallback
 	// Timeout is the maximum time for the TCP connection.
-	Timeout time.Duration
-	// HandshakeTimeout is the deadline for the SSH handshake. Zero means no timeout.
-	HandshakeTimeout time.Duration
+	DialTimeout time.Duration
+	// NegotiationTimeout is the deadline for the SSH handshake. Zero means no timeout.
+	NegotiationTimeout time.Duration
 }
 
 // AuthMethods returns the ssh.AuthMethod slice for this configuration.
@@ -244,11 +244,11 @@ func (c *Client) newTransport(ctx context.Context) (*ssh.Client, error) {
 		Auth:              auth,
 		HostKeyCallback:   c.config.HostKeyCallback,
 		HostKeyAlgorithms: preferredAlgos,
-		Timeout:           c.config.Timeout,
+		Timeout:           c.config.DialTimeout,
 	}
 
-	if c.config.HandshakeTimeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(c.config.HandshakeTimeout))
+	if c.config.NegotiationTimeout > 0 {
+		_ = conn.SetDeadline(time.Now().Add(c.config.NegotiationTimeout))
 	}
 
 	cc, chans, reqs, err := ssh.NewClientConn(conn, c.addr, sshConfig)
@@ -257,7 +257,7 @@ func (c *Client) newTransport(ctx context.Context) (*ssh.Client, error) {
 		return nil, fmt.Errorf("ssh handshake with %s: %w", c.addr, err)
 	}
 
-	if c.config.HandshakeTimeout > 0 {
+	if c.config.NegotiationTimeout > 0 {
 		_ = conn.SetDeadline(time.Time{})
 	}
 
