@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-// Dialer mirrors the net.Dialer interface.
-type Dialer interface {
+// ContextDialer mirrors the net.Dialer interface.
+type ContextDialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
@@ -25,7 +25,7 @@ type Dialer interface {
 //
 // For schemes that require a host, a default port is applied if the URL host is
 // missing a port.
-func New(cfg Config, upstream string) (Dialer, error) {
+func New(cfg Config, upstream string) (ContextDialer, error) {
 	u, err := url.Parse(upstream)
 	if err != nil {
 		return nil, fmt.Errorf("invalid url: %w", err)

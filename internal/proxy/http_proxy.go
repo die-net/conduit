@@ -21,7 +21,7 @@ import (
 // - non-CONNECT proxying (via httputil.ReverseProxy)
 type HTTPProxyServer struct {
 	ctx    context.Context
-	dialer dialer.Dialer
+	dialer dialer.ContextDialer
 	srv    *http.Server
 	rp     *httputil.ReverseProxy
 }

@@ -3,6 +3,8 @@ package dialer
 import (
 	"reflect"
 	"testing"
+
+	"github.com/die-net/conduit/internal/ssh"
 )
 
 func TestNew(t *testing.T) {
@@ -37,7 +39,7 @@ func TestNew(t *testing.T) {
 		{
 			name:     "ssh default port",
 			upstream: "ssh://user:pass@ssh.example",
-			wantType: &SSHProxyDialer{},
+			wantType: &ssh.Client{},
 		},
 		{
 			name:     "scheme case-insensitive",

@@ -20,13 +20,13 @@ type HTTPProxyDialer struct {
 	cfg      Config
 	proxyURL *url.URL
 	auth     string
-	direct   Dialer
+	direct   ContextDialer
 }
 
 // NewHTTPProxyDialer constructs an HTTP CONNECT dialer for proxyURL.
 //
 // If username is non-empty, Proxy-Authorization is set using HTTP Basic auth.
-func NewHTTPProxyDialer(cfg Config, proxyURL *url.URL, username, password string) (Dialer, error) {
+func NewHTTPProxyDialer(cfg Config, proxyURL *url.URL, username, password string) (ContextDialer, error) {
 	if proxyURL == nil {
 		return nil, errors.New("http proxy dialer: missing proxy url")
 	}
@@ -66,7 +66,7 @@ func (f *HTTPProxyDialer) ProxyURL() *url.URL {
 }
 
 // Direct returns the underlying direct dialer used to reach the proxy.
-func (f *HTTPProxyDialer) Direct() Dialer {
+func (f *HTTPProxyDialer) Direct() ContextDialer {
 	return f.direct
 }
 
