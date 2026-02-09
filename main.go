@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/die-net/conduit/internal/conn"
 	"github.com/die-net/conduit/internal/dialer"
 	"github.com/die-net/conduit/internal/proxy"
 	"github.com/die-net/conduit/internal/ssh"
@@ -114,7 +115,7 @@ func run() error {
 	}
 
 	if *httpListen != "" {
-		ln, err := proxy.ListenTCP("tcp", *httpListen, cfg.KeepAlive)
+		ln, err := conn.ListenTCP("tcp", *httpListen, cfg.KeepAlive)
 		if err != nil {
 			return fmt.Errorf("http listen: %w", err)
 		}
@@ -134,7 +135,7 @@ func run() error {
 	}
 
 	if *socksListen != "" {
-		ln, err := proxy.ListenTCP("tcp", *socksListen, cfg.KeepAlive)
+		ln, err := conn.ListenTCP("tcp", *socksListen, cfg.KeepAlive)
 		if err != nil {
 			return fmt.Errorf("socks5 listen: %w", err)
 		}

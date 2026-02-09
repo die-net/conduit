@@ -63,9 +63,8 @@ linters:
         - bools
         - buildtag
         - cgocall
-        - composite
-        - copylock
-        - durationcheck
+        - composites
+        - copylocks
         - errorsas
         - findcall
         - httpresponse

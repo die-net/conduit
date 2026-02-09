@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/die-net/conduit/internal/proxy"
+	"github.com/die-net/conduit/internal/conn"
 )
 
 // IsSupported is true on TPROXY-supporting OSes.
@@ -44,7 +44,7 @@ func ListenTransparentTCP(addr string, keepAliveConfig net.KeepAliveConfig) (net
 	if err != nil {
 		return nil, fmt.Errorf("listen tproxy %s: %w", addr, err)
 	}
-	return &proxy.KeepAliveListener{Listener: ln, KeepAliveConfig: keepAliveConfig}, nil
+	return &conn.KeepAliveListener{Listener: ln, KeepAliveConfig: keepAliveConfig}, nil
 }
 
 // OriginalDst returns the original destination for a TCP connection redirected

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/die-net/conduit/internal/conn"
 	"github.com/die-net/conduit/internal/dialer"
 	"github.com/die-net/conduit/internal/socks5"
 	"github.com/die-net/conduit/internal/testutil"
@@ -26,10 +27,11 @@ func TestSOCKS5ConnectDirect(t *testing.T) {
 	}
 
 	cfg := Config{
-		Dialer: dr,
+		Dialer:             dr,
+		NegotiationTimeout: 2 * time.Second,
 	}
 
-	ln, err := ListenTCP("tcp", "127.0.0.1:0", net.KeepAliveConfig{Enable: false})
+	ln, err := conn.ListenTCP("tcp", "127.0.0.1:0", net.KeepAliveConfig{Enable: false})
 	if err != nil {
 		t.Fatal(err)
 	}

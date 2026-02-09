@@ -6,11 +6,12 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/die-net/conduit/internal/conn"
 )
 
 // Server is an SSH server that supports TCP tunneling via direct-tcpip channels.
@@ -106,13 +107,13 @@ func (s *Server) Addr() net.Addr {
 // This method blocks until Close is called or an unrecoverable error occurs.
 func (s *Server) Serve(ctx context.Context) error {
 	for {
-		conn, err := s.listener.Accept()
+		c, err := s.listener.Accept()
 		if err != nil {
 			return fmt.Errorf("ssh server accept: %w", err)
 		}
 
 		s.wg.Go(func() {
-			s.handleConn(ctx, conn)
+			s.handleConn(ctx, c)
 		})
 	}
 }
@@ -134,10 +135,10 @@ func (s *Server) Close() error {
 }
 
 // handleConn handles a single SSH connection.
-func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
-	defer conn.Close()
+func (s *Server) handleConn(ctx context.Context, c net.Conn) {
+	defer c.Close()
 
-	sshConn, chans, reqs, err := ssh.NewServerConn(conn, s.config)
+	sshConn, chans, reqs, err := ssh.NewServerConn(c, s.config)
 	if err != nil {
 		return
 	}
@@ -202,28 +203,13 @@ func (s *Server) handleDirectTCPIP(ctx context.Context, newChan ssh.NewChannel) 
 
 	// Proxy data bidirectionally.
 	go func() {
-		defer ch.Close()
-		defer dst.Close()
-
-		done := make(chan struct{}, 2)
-
-		go func() {
-			_, _ = io.Copy(dst, ch)
-			done <- struct{}{}
-		}()
-
-		go func() {
-			_, _ = io.Copy(ch, dst)
-			done <- struct{}{}
-		}()
-
-		// Wait for one direction to finish, then close both.
-		<-done
+		_ = conn.CopyBidirectional(ctx, dst, ch)
 	}()
 }
 
-// generateHostKey generates a random RSA host key for the server.
-func generateHostKey() (ssh.Signer, error) {
+// GenerateHostKey generates a random RSA host key for the server.
+// This is useful for testing or when a persistent host key is not needed.
+func GenerateHostKey() (ssh.Signer, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err
