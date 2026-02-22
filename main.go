@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -24,6 +26,13 @@ import (
 	"github.com/die-net/conduit/internal/proxy"
 	"github.com/die-net/conduit/internal/ssh"
 	"github.com/die-net/conduit/internal/tproxy"
+)
+
+// Build-time variables set via ldflags.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 func main() {
@@ -50,6 +59,7 @@ func run() error {
 		sshKnownHosts      = pflag.String("ssh-known-hosts", defaultSSHKnownHostsPath(), "Path to known_hosts file for SSH host key verification, or empty to disable")
 		tcpKeepAlive       = pflag.String("tcp-keepalive", "45:45:3", "TCP keepalive: on|off|keepidle:keepintvl:keepcnt")
 		verbose            = pflag.Bool("verbose", false, "Enable per-connection error logging")
+		showVersion        = pflag.Bool("version", false, "Print version information and exit")
 	)
 
 	if !tproxy.IsSupported {
@@ -58,6 +68,16 @@ func run() error {
 
 	pflag.CommandLine.SortFlags = false
 	pflag.Parse()
+
+	if *showVersion {
+		if version == "dev" {
+			if bi, ok := debug.ReadBuildInfo(); ok {
+				version = bi.Main.Version
+			}
+		}
+		fmt.Printf("conduit %s (commit: %s, built: %s, os: %s, arch: %s)\n", version, commit, date, runtime.GOOS, runtime.GOARCH)
+		return nil
+	}
 
 	ka, err := parseTCPKeepAlive(*tcpKeepAlive)
 	if err != nil {

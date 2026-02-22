@@ -2,3 +2,4 @@
 conduit
 *.test
 *.out
+dist/
