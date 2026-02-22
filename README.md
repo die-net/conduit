@@ -110,7 +110,7 @@ Listener flags (any can be omitted to disable that listener):
 
 - `--http-listen=IP:port`
 - `--socks5-listen=IP:port`
-- `--tproxy-listen=IP:port` (Linux only)
+- `--tproxy-listen=IP:port` (Linux, FreeBSD, OpenBSD)
 
 Debug flags:
 
@@ -212,9 +212,6 @@ On platforms other than Linux, FreeBSD, and OpenBSD, `--tproxy-listen` returns a
 
 - **TPROXY robustness**:
   - Improve validation/diagnostics around kernel/sysctl prerequisites.
-- **HTTP proxy correctness/performance**:
-  - Consider connection reuse tuning and explicit transport settings (idle conns, max conns per host, etc.).
-  - Add explicit filtering/handling for hop-by-hop headers as needed for edge cases.
 - **Security/authentication**:
   - Add optional auth for HTTP proxy and SOCKS5.
   - Add allow/deny lists.

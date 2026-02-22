@@ -105,31 +105,26 @@ func writeError(brw *bufio.ReadWriter, err error, code int) (int, error) {
 }
 
 func newReverseProxy(cfg Config) *httputil.ReverseProxy {
-	director := func(r *http.Request) {
-		// Forward-proxy handling: ensure URL is absolute and points at the origin server.
-		if r.URL == nil {
+	rewrite := func(pr *httputil.ProxyRequest) {
+		out := pr.Out
+		if out.URL == nil {
 			return
 		}
-
-		// Allow schema override through a non-standard header.  If
-		// not supplied, assume explicitly mentioning port 443
-		// (which is not usually supplied) means https.
-		if s, ok := r.Header["X-Proxy-Scheme"]; ok {
-			delete(r.Header, "X-Proxy-Scheme")
-			r.URL.Scheme = s[0]
-		} else if r.URL.Port() == "443" {
-			r.URL.Scheme = "https"
-		} else if r.URL.Scheme == "" {
-			r.URL.Scheme = "http"
+		// Forward-proxy handling: ensure URL is absolute and points at the origin server.
+		// Allow schema override via non-standard header. If not supplied, port 443 implies https.
+		if s, ok := out.Header["X-Proxy-Scheme"]; ok && len(s) > 0 {
+			out.Header.Del("X-Proxy-Scheme")
+			out.URL.Scheme = s[0]
+		} else if out.URL.Port() == "443" {
+			out.URL.Scheme = "https"
+		} else if out.URL.Scheme == "" {
+			out.URL.Scheme = "http"
 		}
-
-		if r.URL.Host == "" {
-			r.URL.Host = r.Host
+		if out.URL.Host == "" {
+			out.URL.Host = pr.In.Host
 		}
-		r.Host = r.URL.Host
-
-		// Ask that X-Forwarded-For not be set.
-		r.Header["X-Forwarded-For"] = nil
+		out.Host = out.URL.Host
+		// Do not call SetXForwarded(); we do not add X-Forwarded-* headers.
 	}
 
 	errHandler := func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -137,7 +132,7 @@ func newReverseProxy(cfg Config) *httputil.ReverseProxy {
 	}
 
 	return &httputil.ReverseProxy{
-		Director:      director,
+		Rewrite:       rewrite,
 		Transport:     newTransport(cfg),
 		FlushInterval: 10 * time.Millisecond, // Only buffer incomplete responses briefly
 		ErrorHandler:  errHandler,
