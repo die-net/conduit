@@ -4,6 +4,7 @@ package tproxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"syscall"
@@ -35,7 +36,10 @@ func ListenTransparentTCP(addr string, keepAliveConfig net.KeepAliveConfig) (net
 		if err != nil {
 			return err
 		}
-		return ctrlErr
+		if ctrlErr != nil {
+			return fmt.Errorf("SO_BINDANY: %w (transparent proxy requires root)", ctrlErr)
+		}
+		return nil
 	}}
 	ln, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
@@ -44,16 +48,23 @@ func ListenTransparentTCP(addr string, keepAliveConfig net.KeepAliveConfig) (net
 	return &conn.KeepAliveListener{Listener: ln, KeepAliveConfig: keepAliveConfig}, nil
 }
 
+var errDestUnavailable = errors.New("original destination unavailable (ensure PF rdr-to rules redirect traffic to this listener)")
+
 // OriginalDst returns the original destination for a TCP connection redirected
 // to this listener.
 //
 // On OpenBSD with PF rdr-to rules, the local address of the accepted connection
 // IS the original destination address (PF preserves it during redirection).
-func OriginalDst(c net.Conn) (*net.TCPAddr, bool) {
+func OriginalDst(c net.Conn) (*net.TCPAddr, error) {
 	tc, ok := c.(*net.TCPConn)
 	if !ok {
-		return nil, false
+		return nil, errDestUnavailable
 	}
+
 	addr, ok := tc.LocalAddr().(*net.TCPAddr)
-	return addr, ok
+	if !ok {
+		return nil, errDestUnavailable
+	}
+
+	return addr, nil
 }

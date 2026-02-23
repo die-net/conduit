@@ -4,6 +4,7 @@ package tproxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"syscall"
@@ -31,7 +32,10 @@ func ListenTransparentTCP(addr string, keepAliveConfig net.KeepAliveConfig) (net
 		if err != nil {
 			return err
 		}
-		return ctrlErr
+		if ctrlErr != nil {
+			return fmt.Errorf("IP_TRANSPARENT: %w (ensure TPROXY is enabled in kernel and policy routing is configured)", ctrlErr)
+		}
+		return nil
 	}}
 	ln, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
@@ -52,19 +56,21 @@ func isV6(tc *net.TCPConn) bool {
 	return false
 }
 
+var errDestUnavailable = errors.New("original destination unavailable (ensure IPFW fwd or PF rdr-to rules redirect traffic to this listener)")
+
 // OriginalDst returns the original destination for a TCP connection redirected
 // to this listener.
 //
 // This relies on unix.SO_ORIGINAL_DST (getsockopt) and is supported on Linux.
-func OriginalDst(c net.Conn) (*net.TCPAddr, bool) {
+func OriginalDst(c net.Conn) (*net.TCPAddr, error) {
 	tc, ok := c.(*net.TCPConn)
 	if !ok {
-		return nil, false
+		return nil, errDestUnavailable
 	}
 
 	rc, err := tc.SyscallConn()
 	if err != nil {
-		return nil, false
+		return nil, errDestUnavailable
 	}
 
 	if isV6(tc) {
@@ -74,8 +80,8 @@ func OriginalDst(c net.Conn) (*net.TCPAddr, bool) {
 	return originalDstV4(rc)
 }
 
-func originalDstV4(rc syscall.RawConn) (*net.TCPAddr, bool) {
-	success := false
+func originalDstV4(rc syscall.RawConn) (*net.TCPAddr, error) {
+	err := errDestUnavailable
 	var addr *net.TCPAddr
 
 	_ = rc.Control(func(fd uintptr) {
@@ -103,14 +109,14 @@ func originalDstV4(rc syscall.RawConn) (*net.TCPAddr, bool) {
 		port := ntohs(sa.Port)
 		ip := net.IPv4(sa.Addr[0], sa.Addr[1], sa.Addr[2], sa.Addr[3])
 		addr = &net.TCPAddr{IP: ip, Port: port}
-		success = true
+		err = nil
 	})
 
-	return addr, success
+	return addr, err
 }
 
-func originalDstV6(rc syscall.RawConn) (*net.TCPAddr, bool) {
-	success := false
+func originalDstV6(rc syscall.RawConn) (*net.TCPAddr, error) {
+	err := errDestUnavailable
 	var addr *net.TCPAddr
 
 	_ = rc.Control(func(fd uintptr) {
@@ -146,10 +152,10 @@ func originalDstV6(rc syscall.RawConn) (*net.TCPAddr, bool) {
 		}
 
 		addr = &net.TCPAddr{IP: ip, Port: port, Zone: zone}
-		success = true
+		err = nil
 	})
 
-	return addr, success
+	return addr, err
 }
 
 func ntohs(p uint16) int {

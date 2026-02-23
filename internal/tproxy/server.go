@@ -2,7 +2,6 @@ package tproxy
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -55,9 +54,9 @@ func (s *Server) handle(c net.Conn) error {
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
 
-	dst, ok := OriginalDst(c)
-	if !ok {
-		return errors.New("original destination unavailable")
+	dst, err := OriginalDst(c)
+	if err != nil {
+		return err
 	}
 
 	up, err := s.Dialer.DialContext(ctx, "tcp", dst.String())

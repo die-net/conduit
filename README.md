@@ -208,10 +208,21 @@ Uses `SO_BINDANY` socket option (at socket level, unlike FreeBSD's protocol leve
 
 On platforms other than Linux, FreeBSD, and OpenBSD, `--tproxy-listen` returns an error (build remains portable).
 
+### Prerequisites and troubleshooting
+
+- **Linux**: The kernel must have TPROXY support (e.g. CONFIG_NETFILTER_XT_TARGET_TPROXY or nft TPROXY). Policy routing must be configured so that redirected traffic is delivered locally, for example:
+  ```bash
+  ip rule add fwmark 1 lookup 100
+  ip route add local 0.0.0.0/0 dev lo table 100
+  ```
+  If listening fails with `IP_TRANSPARENT` or connections fail with "original destination unavailable", ensure TPROXY rules and policy routing are in place. Enabling `net.ipv4.ip_forward` (and optionally `net.ipv6.conf.all.forwarding`) is often required for the overall setup.
+- **FreeBSD**: Listening requires root or the `PRIV_NETINET_BINDANY` capability. If you see "original destination unavailable", ensure IPFW fwd or PF rdr-to rules redirect traffic to the listener.
+- **OpenBSD**: Listening requires root. If you see "original destination unavailable", ensure PF rdr-to rules redirect traffic to the listener and that return traffic is handled (e.g. `divert-reply` on outbound rules).
+
 ## TODO / Caveats
 
 - **TPROXY robustness**:
-  - Improve validation/diagnostics around kernel/sysctl prerequisites.
+  - Optional: add a startup or CLI check that validates socket options and reports clearer diagnostics (e.g. sysctl hints).
 - **Security/authentication**:
   - Add optional auth for HTTP proxy and SOCKS5.
   - Add allow/deny lists.
@@ -220,5 +231,3 @@ On platforms other than Linux, FreeBSD, and OpenBSD, `--tproxy-listen` returns a
   - Prometheus metrics.
 - **Graceful shutdown**:
   - Drain active tunnel connections more gracefully (currently relies on listener/server close).
-- **Context handling for upstream SOCKS5**:
-  - Verify cancellation behavior across all failure modes (DNS, connect, handshake) and add targeted tests.
