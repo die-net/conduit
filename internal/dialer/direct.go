@@ -9,6 +9,7 @@ type directDialer struct {
 	dialer         net.Dialer
 	defaultNetwork string
 	keepAlive      net.KeepAliveConfig
+	dontLinger     bool
 }
 
 // NewDirectDialer returns a Dialer that dials destination addresses directly.
@@ -17,6 +18,7 @@ func NewDirectDialer(cfg Config) (ContextDialer, error) {
 		dialer:         net.Dialer{Timeout: cfg.DialTimeout},
 		defaultNetwork: defaultNetwork(),
 		keepAlive:      cfg.KeepAlive,
+		dontLinger:     cfg.DontLinger,
 	}
 	return dd, nil
 }
@@ -49,6 +51,10 @@ func (f *directDialer) DialContext(ctx context.Context, network, address string)
 
 	if tc, ok := conn.(*net.TCPConn); ok {
 		_ = tc.SetKeepAliveConfig(f.keepAlive)
+
+		if f.dontLinger {
+			_ = tc.SetLinger(0)
+		}
 	}
 
 	return conn, nil

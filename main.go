@@ -115,8 +115,7 @@ func run() error {
 
 	if *debugListen != "" {
 		debugSrv := &http.Server{Handler: http.DefaultServeMux} //nolint:gosec // Not concerned about timeouts on debug port.
-		lc := net.ListenConfig{KeepAliveConfig: cfg.KeepAlive}
-		debugLn, err := lc.Listen(ctx, "tcp", *debugListen)
+		debugLn, err := conn.ListenTCP("tcp", *debugListen, cfg.KeepAlive)
 		if err != nil {
 			return fmt.Errorf("debug listen: %w", err)
 		}

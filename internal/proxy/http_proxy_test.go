@@ -90,6 +90,7 @@ func TestHTTPProxyNonConnect(t *testing.T) {
 			// Start HTTP proxy server.
 			dr, err := dialer.NewDirectDialer(dialer.Config{
 				DialTimeout: 2 * time.Second,
+				DontLinger:  true,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -164,6 +165,7 @@ func TestHTTPProxyConnectDirect(t *testing.T) {
 
 	dr, err := dialer.NewDirectDialer(dialer.Config{
 		DialTimeout: 2 * time.Second,
+		DontLinger:  true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -231,6 +233,7 @@ func BenchmarkHTTPProxyDirect(b *testing.B) {
 
 	dr, err := dialer.NewDirectDialer(dialer.Config{
 		DialTimeout: 2 * time.Second,
+		DontLinger:  true,
 	})
 	if err != nil {
 		b.Fatal(err)
